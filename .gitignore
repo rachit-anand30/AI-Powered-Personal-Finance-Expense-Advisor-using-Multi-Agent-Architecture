@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+.env
+.venv/
+venv/
+env/
+*.pyc
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js / Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+.npm/
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# MongoDB
+*.db
+data.db
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Misc
+*.tmp
+*.bak
