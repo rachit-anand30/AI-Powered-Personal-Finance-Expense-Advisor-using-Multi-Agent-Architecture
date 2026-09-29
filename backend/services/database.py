@@ -1,6 +1,9 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import List, Dict, Any
-from ..config import settings
+try:
+    from ..config import settings
+except (ImportError, ValueError):
+    from config import settings
 import logging
 
 logger = logging.getLogger(__name__)

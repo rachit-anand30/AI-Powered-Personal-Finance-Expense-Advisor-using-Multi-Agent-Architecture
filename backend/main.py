@@ -1,8 +1,23 @@
+import sys
+from pathlib import Path
+
+# Add backend directory and project root to sys.path so imports work from anywhere
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BACKEND_DIR.parent
+for p in [str(PROJECT_ROOT), str(BACKEND_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from config import settings
-from services.database import db_service
-from routers import transactions, budget, prediction, advice
+try:
+    from backend.config import settings
+    from backend.services.database import db_service
+    from backend.routers import transactions, budget, prediction, advice
+except (ImportError, ValueError):
+    from config import settings
+    from services.database import db_service
+    from routers import transactions, budget, prediction, advice
 import logging
 
 logging.basicConfig(level=logging.INFO)

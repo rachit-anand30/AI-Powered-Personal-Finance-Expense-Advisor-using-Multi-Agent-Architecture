@@ -1,9 +1,15 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
-from ..models.transaction import TransactionBatch, Transaction
-from ..models.response import ExpenseAnalysisResponse
-from ..services.database import db_service
-from ..agents.coordinator_agent import CoordinatorAgent
+try:
+    from ..models.transaction import TransactionBatch, Transaction
+    from ..models.response import ExpenseAnalysisResponse
+    from ..services.database import db_service
+    from ..agents.coordinator_agent import CoordinatorAgent
+except (ImportError, ValueError):
+    from models.transaction import TransactionBatch, Transaction
+    from models.response import ExpenseAnalysisResponse
+    from services.database import db_service
+    from agents.coordinator_agent import CoordinatorAgent
 
 router = APIRouter(prefix="", tags=["Transactions"])
 coordinator = CoordinatorAgent()

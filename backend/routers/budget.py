@@ -1,7 +1,12 @@
 from fastapi import APIRouter
-from ..models.transaction import TransactionBatch
-from ..models.budget import BudgetPlan
-from ..agents.coordinator_agent import CoordinatorAgent
+try:
+    from ..models.transaction import TransactionBatch
+    from ..models.budget import BudgetPlan
+    from ..agents.coordinator_agent import CoordinatorAgent
+except (ImportError, ValueError):
+    from models.transaction import TransactionBatch
+    from models.budget import BudgetPlan
+    from agents.coordinator_agent import CoordinatorAgent
 
 router = APIRouter(prefix="", tags=["Budget"])
 coordinator = CoordinatorAgent()

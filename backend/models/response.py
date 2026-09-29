@@ -7,7 +7,7 @@ class ExpenseAnalysisResponse(BaseModel):
     monthly_total: float
     daily_average: float
     spending_percentages: Dict[str, float]
-    highest_expense_category: str
+    highest_expense_category: Optional[str] = None
     overspending_alerts: List[str]
     trends: Dict[str, Any]
     risk_level: str

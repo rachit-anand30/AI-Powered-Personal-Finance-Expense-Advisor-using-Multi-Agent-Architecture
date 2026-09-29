@@ -1,7 +1,11 @@
 from fastapi import APIRouter
 from typing import Dict, Any
-from ..models.transaction import TransactionBatch
-from ..agents.coordinator_agent import CoordinatorAgent
+try:
+    from ..models.transaction import TransactionBatch
+    from ..agents.coordinator_agent import CoordinatorAgent
+except (ImportError, ValueError):
+    from models.transaction import TransactionBatch
+    from agents.coordinator_agent import CoordinatorAgent
 
 router = APIRouter(prefix="", tags=["Prediction"])
 coordinator = CoordinatorAgent()

@@ -48,19 +48,23 @@ The **AI-Powered Personal Finance & Expense Advisor** is a state-of- natural lan
 
 ### Backend Setup
 ```bash
-# Clone the repository and navigate to backend directory
+# Navigate to backend directory
+cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload
 ```
+*Alternatively from project root: `uvicorn backend.main:app --reload`*
 *Server runs on `http://localhost:8000`*
 
 ### Frontend Setup
 ```bash
 # Navigate to frontend directory
+cd frontend
 npm install
 npm run dev
 ```
-*Dashboard runs on `http://localhost:3000`*
+*Alternatively from project root: `npm run dev`*
+*Dashboard runs on `http://localhost:5173` (or `http://localhost:3000`)*
 
 ## 🔌 API Endpoint List
 - `GET /` - API Health check
@@ -81,7 +85,7 @@ npm run dev
 ## 🧪 How to Run Tests
 ```bash
 # From the project root directory
-pytest tests/ -v
+pytest backend/tests/ -v
 ```
 
 ## 📂 File Structure

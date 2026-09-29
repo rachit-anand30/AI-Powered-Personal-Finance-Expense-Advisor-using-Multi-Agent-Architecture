@@ -1,9 +1,14 @@
 from fastapi import APIRouter
 from typing import Dict, Any
 from pydantic import BaseModel
-from ..models.transaction import TransactionBatch
-from ..models.response import FullAnalysisResponse
-from ..agents.coordinator_agent import CoordinatorAgent
+try:
+    from ..models.transaction import TransactionBatch
+    from ..models.response import FullAnalysisResponse
+    from ..agents.coordinator_agent import CoordinatorAgent
+except (ImportError, ValueError):
+    from models.transaction import TransactionBatch
+    from models.response import FullAnalysisResponse
+    from agents.coordinator_agent import CoordinatorAgent
 
 router = APIRouter(prefix="", tags=["Advice"])
 coordinator = CoordinatorAgent()

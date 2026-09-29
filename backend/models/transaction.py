@@ -1,10 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import date
+from datetime import date as dt_date
 
 class Transaction(BaseModel):
     """Model representing a single financial transaction."""
-    date: date = Field(..., description="Date of the transaction")
+    date: dt_date = Field(..., description="Date of the transaction")
     description: str = Field(..., description="Description or merchant name")
     amount: float = Field(..., description="Transaction amount in INR")
     category: Optional[str] = Field(default=None, description="Inferred or user-provided category")
