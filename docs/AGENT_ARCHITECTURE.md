@@ -1,90 +1,102 @@
 # 🏗️ Multi-Agent Architecture
 
-## 1. System Overview
-The system employs a **Multi-Agent AI Architecture** to handle personal finance. 
-**Why Multi-Agent vs. Single Agent?**
-Personal finance requires a diverse set of skills (categorization, anomaly detection, forecasting, and NLP advising). A monolithic single agent would be computationally heavy and prone to cross-contamination of logic. A multi-agent system provides modularity, specialized optimization (e.g., ML forecasting vs. Keyword-based matching), and high scalability.
+## 1. Why multiple agents?
 
-**Agent Autonomy Levels:**
-- Reactive (Analyzer, Anomaly Detector): Operates directly on immediate input data.
-- Deliberative (Budget Planner, Advisor): Makes forward-looking decisions based on states and goals.
+Personal finance needs very different kinds of reasoning: text classification, robust statistics,
+search-based optimisation, time-series regression, rule-based planning and language generation. Each
+agent owns exactly one of these, has its own inputs and outputs, and can be tested on its own (see
+`backend/tests/test_agents.py`). Swapping an algorithm, for example a different classifier, touches
+one file.
 
-## 2. Architecture Diagram
+## 2. Architecture
 
 ```text
-┌─────────────────────────────────────────────────────┐
-│               USER INTERFACE                        │
-│  (React Dashboard + Transaction Input)              │
-└─────────────────────┬───────────────────────────────┘
-                      │
-               FastAPI REST API
-                      │
-           ┌──────────┴──────────┐
-           │  COORDINATOR AGENT  │ (Team Member 3)
-           │  (Central Hub)      │
-           └──────┬───┬───┬──────┘
-                  │   │   │
-     ┌────────────┼── │ ──┼────────────┐
-     │            │   │   │            │
-┌────┴───┐ ┌──────┴┐ ┌┴──────┐ ┌───────┴┐ ┌────────┐
-│Expense │ │Anomaly│ │Budget │ │Predict │ │Advisor │
-│Analyzer│ │Detect │ │Planner│ │Agent   │ │Agent   │
-│(TM1)   │ │(TM1)  │ │(TM2)  │ │(TM2)   │ │(TM3)   │
-└────────┘ └───────┘ └───────┘ └────────┘ └────────┘
+            React dashboard (Vite + Tailwind + Recharts)
+                               │  JSON / CSV over HTTP
+                         FastAPI REST API
+                               │
+                 ┌─────────────┴──────────────┐
+                 │     COORDINATOR AGENT      │   blackboard + trace + message bus
+                 └─────────────┬──────────────┘
+                               │ dispatches in dependency order
+  ┌────────────┬───────────────┼──────────────┬─────────────┬────────────┐
+  ▼            ▼               ▼              ▼             ▼            ▼
+Expense ──▶ Anomaly ──▶ Budget Planner   Prediction ──▶ Investment ──▶ Advisor
+Analyzer    Detection     (TM2)            (TM2)          (TM3)         (TM3)
+ (TM1)       (TM1)          ▲                ▲              ▲
+   │           ├──── set aside flagged ──────┘              │
+   │           └──── ignore one-offs ───────────────────────┘ (via Budget/Prediction risk)
+   └── ML/NLP classifier (TF-IDF + Logistic Regression)
 ```
 
-## 3. Agent Communication Protocol
-Agents communicate via a centralized **Hub-and-Spoke model** managed by the Coordinator Agent using asynchronous JSON message passing. 
+## 3. Communication: blackboard pattern
 
-**Message Schema Example:**
+The coordinator keeps a **blackboard**, a shared dictionary. It holds the request
+(`transactions`, `monthly_income`, `saving_goal`, `user_query`), and each agent's result is written
+back under its own key. Each agent declares what it **reads**:
+
+| # | Agent | Reads | Writes |
+|---|---|---|---|
+| 1 | Expense Analyzer | transactions, monthly_income | `expense_analysis` (and labels each transaction) |
+| 2 | Anomaly Detection | transactions, expense_analysis | `anomalies` |
+| 3 | Budget Planner | expense_analysis, anomalies, monthly_income, saving_goal | `budget_plan` |
+| 4 | Prediction | transactions, anomalies, monthly_income | `predictions` |
+| 5 | Investment | budget_plan, predictions, anomalies | `investment_plan` |
+| 6 | Advisor | everything above + user_query | `advice` |
+
+After each agent runs, the coordinator posts explicit **hand-off messages** to a message bus. These
+are returned in the API response as `messages` and shown on the **Agents** tab:
+
 ```json
-{
-  "sender": "CoordinatorAgent",
-  "recipient": "AnomalyDetector",
-  "action": "ANALYZE_TRANSACTIONS",
-  "payload": [{ "id": 1, "amount": 75000, "category": "Shopping" }],
-  "timestamp": "2023-10-25T14:30:00Z"
-}
+{"from": "Anomaly Detection", "to": "Prediction",
+ "content": "Exclude 1 one-off transaction(s) worth ₹75,000 from the forecast."}
 ```
 
-## 4. Agent Interaction Scenarios
+It also records a **trace** entry per agent: reads → writes, a one-line summary and runtime in ms.
+If any agent raises, the pipeline stops, and the API returns HTTP 500 with the log so far. It never
+returns a half-filled response.
 
-### Normal Analysis Flow
-1. API receives transactions.
-2. Coordinator sends to `Expense Analyzer`.
-3. Analyzer returns categorized data to Coordinator.
-4. Coordinator passes this to `Budget Planner`.
-5. Planner generates optimization report.
-6. Coordinator returns aggregated result to user.
+## 4. Interactions that change the outcome
 
-### Fraud Detection Flow
-1. Real-time transaction arrives.
-2. Coordinator pushes strictly to `Anomaly Detector`.
-3. Detector flags `amount > 3 stdev`.
-4. Coordinator interrupts normal flow, triggering push notification.
+These are not just data passing. Each one changes another agent's result:
 
-### Budget Creation Flow
-1. User provides income and savings goal.
-2. `Expense Analyzer` calculates past averages.
-3. `Budget Planner` executes Constraint Satisfaction to generate limits.
-4. `Advisor Agent` translates limits into readable advice.
+1. **Expense Analyzer → everyone:** ML category labels decide what counts as Needs, Wants or
+   Investments, and which transactions the fraud detector even looks at.
+2. **Anomaly → Budget Planner:** a flagged ₹75,000 charge is set aside, so the planner does **not**
+   tell the user to "cut Shopping by ₹6,700/month" because of a fraud.
+3. **Anomaly → Prediction:** the same charge is excluded from the time series, so the forecast stays
+   at about ₹31k instead of jumping because of a one-off.
+4. **Budget + Prediction + Anomaly → Investment:** surplus sets how much can be invested, and the
+   forecast and fraud risk set the risk profile. A rising forecast pushes Arjun to *Conservative*
+   despite a 34% savings rate.
+5. **All → Advisor:** recommendations are ranked by priority and tagged with the agent that produced
+   the evidence.
 
-### Prediction Flow
-1. Coordinator requests next month's forecast.
-2. `Predict Agent` runs Linear Regression/MA on past 6 months.
-3. `Advisor Agent` interprets trends (e.g., "Your utilities are trending up").
+## 5. Agent types
 
-## 5. Agent Types Classification
-- **Reactive Agents:** Expense Analyzer, Anomaly Detector. They respond immediately to stimuli without internal long-term state.
-- **Deliberative Agents:** Budget Planner, Predictor. These utilize **BDI (Belief-Desire-Intention)** models.
-  - *Belief:* Current financial state.
-  - *Desire:* Maximize savings.
-  - *Intention:* Formulate action plan (budget cuts).
-- **Cooperation Level:** High (Collaborative). Agents share a global utility function (User Financial Health).
+| Agent | Type | Reasoning |
+|---|---|---|
+| Expense Analyzer | Learning agent | Supervised text classifier trained at startup, with rule-based fallback |
+| Anomaly Detection | Reactive (model-based) | Compares each transaction against a model of the user's normal distribution |
+| Budget Planner | **Goal-based** | Searches the space of cuts for a state that satisfies the savings goal |
+| Prediction | Model-based | Fits a regression model of spending over time |
+| Investment | Utility-based (rule-encoded) | Trades off safety (emergency fund, insurance) against growth by risk profile |
+| Advisor | Goal-based / communicative | Maps the user's intent to the most relevant evidence |
+| Coordinator | Orchestrator | Schedules agents by data dependency, manages the blackboard |
 
-## 6. Environment Analysis
-- **Partially Observable:** The system doesn't know about physical cash or hidden accounts.
-- **Dynamic:** Income, inflation, and expenses change.
-- **Continuous:** Money and time flow continuously, though categorized discreetly.
-- **Multi-Agent:** Collaborative agent network.
-- **Stochastic:** Random financial emergencies break deterministic patterns.
+## 6. Demo scenarios: what each agent does
+
+| Scenario | Key agent behaviour |
+|---|---|
+| Healthy Saver | 0 alerts (recurring BigBasket and SIP not flagged) · health 100 · Investment: *Aggressive* |
+| Fraud Detection | ₹75,000 flagged by **all 3** detectors (136× typical) · excluded from budget and forecast · Advisor leads with a security alert |
+| Budget Warning | savings rate 7.5% → health 59, **High** risk · search expands 26 nodes, cuts Shopping/Food/Transport/Entertainment, leaves rent alone |
+| Lifestyle Creep | Linear Regression, 93% confidence, forecasts ₹63.8k on ₹70k income → **High** forecast risk, trend Increasing |
+
+## 7. Scalability notes
+- Agents are stateless, so one coordinator instance is shared across requests (`routers/deps.py`).
+- Adding an agent means one class plus one row in `CoordinatorAgent.PIPELINE` and one runner.
+- Storage is MongoDB (`motor`, async), with an automatic in-memory fallback when Mongo is not
+  running, so the demo needs no database.
+- The ML model trains in under a second at startup. For a large training set it could be saved with
+  `joblib` instead.

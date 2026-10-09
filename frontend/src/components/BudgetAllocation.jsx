@@ -1,70 +1,55 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { Scale } from 'lucide-react';
+import { inr } from '../lib/format';
+import { Card, CardHeader, ProgressBar } from './ui';
 
-const BudgetAllocation = ({ plan }) => {
-  if (!plan || !plan.limits) return <div className="text-gray-400">No budget data available</div>;
+const BUCKETS = [
+  { key: 'needs', label: 'Needs', hint: 'Rent, bills, health, half of food & transport', color: '#8b5cf6', target: 'needs_budget', actual: 'needs_spent' },
+  { key: 'wants', label: 'Wants', hint: 'Shopping, entertainment, the rest of food & travel', color: '#ec4899', target: 'wants_budget', actual: 'wants_spent' },
+  { key: 'savings', label: 'Savings', hint: 'Whatever is left after spending', color: '#22d3ee', target: 'savings_budget', actual: 'savings' },
+];
 
-  // Transform data for the bar chart
-  const data = Object.keys(plan.limits).map(category => {
-    // We need actual spending to compare, but plan only has limits and rule breakdown.
-    // Assuming we have to mock the actual for the chart or it comes in 'actual_by_category'
-    // Let's create a realistic mock based on limits if actuals per category aren't in plan
-    
-    // In our DEMO data, we don't have actuals per category in budget_plan, 
-    // so we'll just display limits for now, or you could pass actuals as a prop.
-    // For a complete visualization, let's assume we want to show just the limits if actuals aren't available
-    return {
-      name: category,
-      Limit: plan.limits[category],
-    };
-  });
+const BudgetAllocation = ({ plan, delay = 0 }) => {
+  const alloc = plan.budget_allocation || {};
+  const actual = plan.actual_allocation || {};
 
   return (
-    <div className="w-full">
-      <h2 className="text-xl font-bold text-white mb-6">Budget Allocations</h2>
-      
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 text-center">
-          <p className="text-xs text-gray-400 mb-1">Needs (50%)</p>
-          <p className="text-lg font-bold text-blue-400">₹{plan.rule_50_30_20?.needs?.toLocaleString()}</p>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 text-center">
-          <p className="text-xs text-gray-400 mb-1">Wants (30%)</p>
-          <p className="text-lg font-bold text-purple-400">₹{plan.rule_50_30_20?.wants?.toLocaleString()}</p>
-        </div>
-        <div className="bg-gray-900 rounded-lg p-3 border border-gray-700 text-center">
-          <p className="text-xs text-gray-400 mb-1">Savings (20%)</p>
-          <p className="text-lg font-bold text-green-400">₹{plan.rule_50_30_20?.savings?.toLocaleString()}</p>
-        </div>
+    <Card delay={delay} className="h-full">
+      <CardHeader icon={Scale} title="50 / 30 / 20 check" subtitle="This month vs the ideal split" accent="text-fuchsia-300" />
+      <div className="space-y-5">
+        {BUCKETS.map((b) => {
+          const target = alloc[b.target] || 0;
+          const value = actual[b.actual] || 0;
+          const isSavings = b.key === 'savings';
+          const good = isSavings ? value >= target : value <= target;
+          const diff = isSavings ? value - target : target - value;
+          return (
+            <div key={b.key}>
+              <div className="mb-2 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white">{b.label}</p>
+                  <p className="text-[11px] text-slate-500">{b.hint}</p>
+                </div>
+                <div className="text-right">
+                  <p className="num text-sm font-semibold text-white">
+                    {inr(value)} <span className="font-normal text-slate-500">/ {inr(target)}</span>
+                  </p>
+                  <p className={`text-[11px] ${good ? 'text-emerald-300' : 'text-rose-300'}`}>
+                    {good ? (isSavings ? `${inr(diff)} ahead` : `${inr(diff)} headroom`) : (isSavings ? `${inr(-diff)} short` : `${inr(-diff)} over`)}
+                  </p>
+                </div>
+              </div>
+              <ProgressBar value={Math.max(0, value)} max={Math.max(target, value) * 1.05} color={good ? b.color : '#fb7185'} marker={target} />
+            </div>
+          );
+        })}
       </div>
-
-      <div className="h-[250px] w-full mt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 5, right: 10, left: 0, bottom: 25 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-            <XAxis 
-              dataKey="name" 
-              stroke="#9ca3af" 
-              fontSize={12} 
-              tickMargin={10}
-              angle={-45}
-              textAnchor="end"
-            />
-            <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `₹${value/1000}k`} />
-            <Tooltip 
-              cursor={{fill: '#374151', opacity: 0.4}}
-              contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff' }}
-              itemStyle={{ color: '#fff' }}
-              formatter={(value) => [`₹${value.toLocaleString()}`, 'Budget Limit']}
-            />
-            <Bar dataKey="Limit" fill="#8b5cf6" radius={[4, 4, 0, 0]} barSize={30} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
+      {plan.excluded_flagged_amount > 0 && (
+        <p className="mt-5 rounded-xl bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
+          {inr(plan.excluded_flagged_amount)} of flagged charges is set aside until verified.
+        </p>
+      )}
+    </Card>
   );
 };
 

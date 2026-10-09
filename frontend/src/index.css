@@ -3,25 +3,86 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    color-scheme: dark;
+  }
   body {
-    @apply bg-gray-900 text-gray-100;
+    @apply bg-ink-950 text-slate-200 font-sans antialiased min-h-screen;
+    background-image:
+      radial-gradient(60rem 40rem at 10% -10%, rgba(139, 92, 246, 0.16), transparent 60%),
+      radial-gradient(50rem 35rem at 100% 0%, rgba(6, 182, 212, 0.12), transparent 60%),
+      radial-gradient(40rem 30rem at 50% 110%, rgba(236, 72, 153, 0.08), transparent 60%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: rgba(139, 92, 246, 0.35);
   }
 }
 
-/* Custom scrollbar for better appearance in dark mode */
+@layer components {
+  .glass {
+    @apply rounded-2xl border border-white/[0.07] bg-ink-900/70 backdrop-blur-xl;
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 20px 40px -24px rgba(0, 0, 0, 0.6);
+  }
+  .glass-hover {
+    @apply transition-all duration-300 hover:border-white/[0.14] hover:bg-ink-850/80;
+  }
+  .card-title {
+    @apply font-display text-[15px] font-semibold tracking-tight text-white;
+  }
+  .card-sub {
+    @apply text-xs text-slate-500;
+  }
+  .label {
+    @apply text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500;
+  }
+  .num {
+    @apply font-display tabular-nums tracking-tight;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-violet-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/[0.07] hover:text-white;
+  }
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-ink-950/60 px-3.5 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-colors focus:border-violet-500/60 focus:ring-2 focus:ring-violet-500/20;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium;
+  }
+  .skeleton {
+    @apply rounded-xl;
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.08) 120px, rgba(255,255,255,0.03) 240px);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  @apply bg-gray-900;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-700 rounded;
+  @apply rounded-full bg-white/10;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-white/20;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-600;
+.recharts-tooltip-cursor {
+  fill: rgba(255, 255, 255, 0.03);
 }

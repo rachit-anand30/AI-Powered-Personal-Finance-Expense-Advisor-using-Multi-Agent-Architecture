@@ -1,53 +1,39 @@
 # 🤝 Team Responsibilities
 
-This document outlines the breakdown of roles, system components, and presentation responsibilities across the three team members.
+## 🧑‍💻 Team Member 1: Financial data intelligence
+| Component | Files |
+|---|---|
+| Expense Analyzer agent (hybrid ML + rules) | `backend/agents/expense_analyzer_agent.py` |
+| ML/NLP classifier and training data | `backend/services/ml_service.py`, `scripts/generate_training_data.py`, `backend/data/training_transactions.csv`, `backend/data/classifier_test_set.csv` |
+| Anomaly Detection agent (3-detector ensemble) | `backend/agents/anomaly_detection_agent.py` |
+| PEAS documentation | `docs/PEAS_FORMULATION.md` |
 
-## Team Member Breakdown
+- **Presents:** PEAS, environment analysis, ML classification (94% hold-out), fraud detection.
+- **Demos:** Healthy Saver and Fraud Detection scenarios, Transactions tab (ML labels).
 
-### 🧑‍💻 Team Member 1: Financial Data Intelligence
-| Component | Description | Files Modified/Created | Status |
-|-----------|-------------|------------------------|--------|
-| **Expense Analyzer Agent** | Keyword/ML based categorization logic | `agents/analyzer.py` | Complete |
-| **Anomaly Detection Agent** | Statistical outlier detection (Z-score, IF) | `agents/anomaly.py` | Complete |
-| **Dataset Engine** | Creation of realistic financial test data | `data/generator.py` | Complete |
-| **PEAS Documentation** | System and Agent environment models | `docs/PEAS_FORMULATION.md` | Complete |
+## 🧑‍💻 Team Member 2: Budget optimisation and prediction
+| Component | Files |
+|---|---|
+| Budget Planning agent (50/30/20 + greedy best-first search) | `backend/agents/budget_planning_agent.py` |
+| Prediction agent (Linear Regression / Moving Average) | `backend/agents/prediction_agent.py` |
+| Algorithm documentation and tests | `docs/ALGORITHM_EXPLANATION.md`, `backend/tests/test_agents.py` |
 
-- **Presentation Responsibility:** Slides 1-7 (Intro, Data Intelligence, PEAS).
-- **Demo Responsibility:** Scenario 1 (Analysis) & Scenario 3 (Fraud Detection).
+- **Presents:** search problem formulation, health score, regression and confidence.
+- **Demos:** Budget Warning and Lifestyle Creep scenarios, Budget and Forecast tabs.
 
----
+## 🧑‍💻 Team Member 3: Coordinator, Investment, Advisor and application
+| Component | Files |
+|---|---|
+| Coordinator agent (blackboard, trace, message bus) | `backend/agents/coordinator_agent.py` |
+| Investment agent | `backend/agents/investment_agent.py` |
+| Advisor agent (intent detection, NLG) | `backend/agents/advisor_agent.py` |
+| FastAPI API, models, storage | `backend/main.py`, `backend/routers/`, `backend/models/`, `backend/services/database.py` |
+| React dashboard | `frontend/src/` |
+| Architecture docs, API tests | `docs/AGENT_ARCHITECTURE.md`, `docs/API_DOCUMENTATION.md`, `backend/tests/test_api.py` |
 
-### 🧑‍💻 Team Member 2: Budget Optimization & Prediction
-| Component | Description | Files Modified/Created | Status |
-|-----------|-------------|------------------------|--------|
-| **Budget Planning Agent** | 50/30/20 optimizer and CSP search solver | `agents/budget.py` | Complete |
-| **Prediction Agent** | Time-series forecasting (LR & Moving Avg) | `agents/predict.py` | Complete |
-| **Algorithm Docs** | Mathematical formulas and ML explanations | `docs/ALGORITHM_EXPLANATION.md`| Complete |
-| **Testing Implementation** | Pytest cases for calculation logic | `tests/test_agents.py` | Complete |
+- **Presents:** multi-agent architecture and interactions, tool stack, UI.
+- **Demos:** Agents tab (trace + message bus), Ask-the-advisor chat, Invest tab, offline fallback.
 
-- **Presentation Responsibility:** Slides 8-14 (Algorithms, Predictions, Budgets).
-- **Demo Responsibility:** Scenario 2 (Budget Creation) & Scenario 4 (Forecasting).
-
----
-
-### 🧑‍💻 Team Member 3: Multi-Agent Coordinator + Application
-| Component | Description | Files Modified/Created | Status |
-|-----------|-------------|------------------------|--------|
-| **Coordinator Agent** | Multi-agent orchestration and routing | `agents/coordinator.py` | Complete |
-| **Advisor Agent** | NLP-based advice generation from agent data | `agents/advisor.py` | Complete |
-| **API & Frontend** | FastAPI server and React dashboard UI | `main.py`, `src/App.js` | Complete |
-| **Architecture Docs** | System flow and network diagrams | `docs/AGENT_ARCHITECTURE.md` | Complete |
-
-- **Presentation Responsibility:** Slides 15-20 (Architecture, UI, Full Pipeline).
-- **Demo Responsibility:** End-to-End System Demo and API Walkthrough.
-
----
-
-## ⚖️ Workload Balance Analysis
-
-The project was structured to ensure equitable distribution of complexity and effort:
-
-- **Lines of Code:** Each member is responsible for approximately 600-800 lines of core Python/JavaScript code.
-- **AI Components:** Each member owns exactly TWO specialized AI agents.
-- **Documentation:** Responsibilities were split based on domain expertise (e.g., TM1 handles PEAS, TM2 handles Math/Algorithms, TM3 handles overall Architecture).
-- **Integration:** While TM3 handles the web layer, TM1 and TM2 were responsible for writing strictly typed, easily integrated Pydantic interfaces for their respective agents.
+## ⚖️ Balance
+Each member owns two agents and one documentation area. The interfaces between agents are plain
+dictionaries on the coordinator's blackboard, so each member's agents are unit-tested independently.

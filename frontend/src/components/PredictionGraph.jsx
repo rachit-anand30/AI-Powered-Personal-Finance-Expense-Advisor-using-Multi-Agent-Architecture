@@ -1,99 +1,47 @@
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { inr, monthLabel } from '../lib/format';
+import { ChartTooltip } from './ui';
 
-const PredictionGraph = ({ data, income }) => {
-  if (!data || !data.historical) return <div className="text-gray-400">No prediction data available</div>;
-
-  // Prepare data for the chart
-  const chartData = [...data.historical.map(item => ({
-    name: item.month,
-    Actual: item.amount,
-    Predicted: null
-  }))];
-
-  // Add the prediction for the next month
-  // Assuming the next month is just 'Next' for demo purposes
-  const lastHistoricalAmount = data.historical[data.historical.length - 1]?.amount || 0;
-  
-  chartData.push({
-    name: 'Next Month',
-    Actual: null,
-    Predicted: data.next_month_prediction
-  });
-
-  // To draw a continuous line, we need a bridging point
-  // We'll update the last historical point to also have a Predicted value equal to its Actual value
-  if (chartData.length > 1) {
-    chartData[chartData.length - 2].Predicted = chartData[chartData.length - 2].Actual;
+/** History as a solid area, forecast as a dashed continuation, income as a reference line. */
+const PredictionGraph = ({ prediction, income, height = 240 }) => {
+  const history = prediction.monthly_history || [];
+  const data = history.map((h) => ({ month: monthLabel(h.month), actual: h.amount }));
+  if (data.length && prediction.next_month) {
+    data[data.length - 1].forecast = data[data.length - 1].actual;
+    data.push({ month: monthLabel(prediction.next_month), forecast: prediction.predicted_expense });
   }
-
-  const getTrendIcon = (trend) => {
-    if (trend === 'increasing') return <TrendingUp className="text-red-500 mr-2" size={20} />;
-    if (trend === 'decreasing') return <TrendingDown className="text-green-500 mr-2" size={20} />;
-    return <Minus className="text-gray-400 mr-2" size={20} />;
-  };
-
-  const getTrendText = (trend) => {
-    if (trend === 'increasing') return 'Expenses are trending UP';
-    if (trend === 'decreasing') return 'Expenses are trending DOWN';
-    return 'Expenses are STABLE';
-  };
+  const maxY = Math.max(income || 0, ...data.map((d) => Math.max(d.actual || 0, d.forecast || 0))) * 1.15;
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-white mb-1">Expense Prediction</h2>
-          <div className="flex items-center text-sm">
-            {getTrendIcon(data.trend)}
-            <span className="text-gray-300">{getTrendText(data.trend)}</span>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-gray-400 mb-1">Next Month Forecast</p>
-          <p className="text-2xl font-bold text-purple-400">₹{data.next_month_prediction?.toLocaleString()}</p>
-        </div>
-      </div>
-
-      <div className="flex-grow h-[220px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-            <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} tickMargin={10} />
-            <YAxis stroke="#9ca3af" fontSize={12} tickFormatter={(value) => `₹${value/1000}k`} />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#fff' }}
-              formatter={(value) => [`₹${value.toLocaleString()}`, 'Amount']}
-            />
-            <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '12px' }} />
-            
-            {income && (
-              <ReferenceLine y={income} label={{ position: 'top', value: 'Income', fill: '#10b981', fontSize: 12 }} stroke="#10b981" strokeDasharray="3 3" />
-            )}
-            
-            <Line 
-              type="monotone" 
-              dataKey="Actual" 
-              stroke="#3b82f6" 
-              strokeWidth={3}
-              dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#111827' }}
-              activeDot={{ r: 6 }}
-            />
-            <Line 
-              type="monotone" 
-              dataKey="Predicted" 
-              stroke="#a855f7" 
-              strokeWidth={3}
-              strokeDasharray="5 5"
-              dot={{ r: 4, fill: '#a855f7', strokeWidth: 2, stroke: '#111827' }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+    <div style={{ height }} className="w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gActual" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.45} />
+              <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="gForecast" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.3} />
+              <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
+          <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, maxY]}
+            tickFormatter={(v) => inr(v, { compact: true })} />
+          <Tooltip content={<ChartTooltip formatter={(v) => inr(v)} />} />
+          {income > 0 && (
+            <ReferenceLine y={income} stroke="#34d399" strokeDasharray="4 4" strokeOpacity={0.7}
+              label={{ value: `Income ${inr(income, { compact: true })}`, fill: '#34d399', fontSize: 11, position: 'insideTopRight' }} />
+          )}
+          <Area type="monotone" dataKey="actual" name="Actual" stroke="#a78bfa" strokeWidth={2.5} fill="url(#gActual)"
+            dot={{ r: 3, fill: '#a78bfa', strokeWidth: 0 }} activeDot={{ r: 5 }} animationDuration={900} />
+          <Area type="monotone" dataKey="forecast" name="Forecast" stroke="#22d3ee" strokeWidth={2.5} strokeDasharray="6 5"
+            fill="url(#gForecast)" dot={{ r: 4, fill: '#22d3ee', strokeWidth: 0 }} animationDuration={900} />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 };

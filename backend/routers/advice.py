@@ -1,48 +1,44 @@
-from fastapi import APIRouter
-from typing import Dict, Any
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, Optional
+from pydantic import BaseModel, Field
 try:
     from ..models.transaction import TransactionBatch
     from ..models.response import FullAnalysisResponse
-    from ..agents.coordinator_agent import CoordinatorAgent
+    from .deps import coordinator, batch_to_dicts
 except (ImportError, ValueError):
     from models.transaction import TransactionBatch
     from models.response import FullAnalysisResponse
-    from agents.coordinator_agent import CoordinatorAgent
+    from routers.deps import coordinator, batch_to_dicts
 
 router = APIRouter(prefix="", tags=["Advice"])
-coordinator = CoordinatorAgent()
+
 
 class AdviceRequest(BaseModel):
     batch: TransactionBatch
-    user_query: str = None
-    saving_goal: float = None
+    user_query: Optional[str] = Field(default=None, description="Natural-language question for the Advisor agent")
+    saving_goal: Optional[float] = Field(default=None, ge=0, description="Monthly savings goal in INR")
+
+
+def run_pipeline(req: AdviceRequest) -> Dict[str, Any]:
+    result = coordinator.process_user_request(batch_to_dicts(req.batch), req.batch.monthly_income, req.user_query, req.saving_goal)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail={"error": result["error"], "logs": result["logs"]})
+    return result
+
 
 @router.post("/get_financial_advice")
 async def get_financial_advice(req: AdviceRequest) -> Dict[str, Any]:
-    """Accept full context, return NL advice."""
-    transactions_dict = [
-        {**t.model_dump(), 'date': t.date.isoformat()} for t in req.batch.transactions
-    ]
-    # Run full analysis to get context
-    result = coordinator.process_user_request(
-        transactions_dict, 
-        req.batch.monthly_income, 
-        req.user_query, 
-        req.saving_goal
-    )
-    return result.get("advice", {})
+    """Run all agents and return the Advisor's natural-language advice (and answer to user_query)."""
+    return run_pipeline(req)["advice"]
+
+
+@router.post("/investment_plan")
+async def investment_plan(req: AdviceRequest) -> Dict[str, Any]:
+    """Run all agents and return the Investment agent's plan for the monthly surplus."""
+    return run_pipeline(req)["investment_plan"]
+
 
 @router.post("/full_analysis", response_model=FullAnalysisResponse)
 async def full_analysis(req: AdviceRequest):
-    """Master endpoint - runs all agents, returns everything."""
-    transactions_dict = [
-        {**t.model_dump(), 'date': t.date.isoformat()} for t in req.batch.transactions
-    ]
-    result = coordinator.process_user_request(
-        transactions_dict, 
-        req.batch.monthly_income, 
-        req.user_query, 
-        req.saving_goal
-    )
-    return result
+    """Master endpoint - runs all six agents through the coordinator and returns everything."""
+    return run_pipeline(req)

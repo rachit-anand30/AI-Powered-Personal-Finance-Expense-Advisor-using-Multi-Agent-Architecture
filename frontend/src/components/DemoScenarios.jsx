@@ -1,119 +1,56 @@
 import React from 'react';
-import { Play, User, AlertTriangle, ShieldAlert, LineChart } from 'lucide-react';
-import { DEMO_TRANSACTIONS, DEMO_INCOME, DEMO_ANALYSIS_RESULT } from '../data/demoData';
+import { HeartPulse, ShieldAlert, AlertTriangle, TrendingUp, Play, Check } from 'lucide-react';
+import { inr } from '../lib/format';
 
-const DemoScenarios = ({ onLoadScenario }) => {
-  
-  const scenarios = [
-    {
-      id: 'normal',
-      title: 'Normal User Profile',
-      description: 'Healthy spending habits, sticking close to budget limits with regular savings.',
-      icon: User,
-      color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      action: () => {
-        // Clone demo data and remove anomaly
-        const txns = DEMO_TRANSACTIONS.filter(t => t.amount < 70000);
-        const result = JSON.parse(JSON.stringify(DEMO_ANALYSIS_RESULT));
-        result.anomaly_detection.anomalies = [];
-        result.expense_analysis.budget_health_score = 85;
-        result.expense_analysis.total_expenses = 50050; // Adjusted
-        result.advice.recommendations = result.advice.recommendations.filter(r => r.urgency !== 'red');
-        result.advice.summary = "Your financial health is excellent. You are following the 50/30/20 rule well.";
-        onLoadScenario(txns, DEMO_INCOME, result);
-      }
-    },
-    {
-      id: 'overspending',
-      title: 'Overspending Detection',
-      description: 'User consistently exceeding the 50% "Needs" limit due to high rent and food costs.',
-      icon: AlertTriangle,
-      color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-      action: () => {
-        const txns = DEMO_TRANSACTIONS.filter(t => t.amount < 70000); // Remove the 75k anomaly
-        const result = JSON.parse(JSON.stringify(DEMO_ANALYSIS_RESULT));
-        result.anomaly_detection.anomalies = [];
-        result.expense_analysis.budget_health_score = 55;
-        result.advice.recommendations = result.advice.recommendations.filter(r => r.urgency !== 'red');
-        result.advice.summary = "You are spending too much on 'Needs'. Consider reviewing your housing and food expenses.";
-        onLoadScenario(txns, DEMO_INCOME, result);
-      }
-    },
-    {
-      id: 'fraud',
-      title: 'Fraud / Anomaly Detection',
-      description: 'Sudden high-value transaction outside normal spending patterns (Default Demo).',
-      icon: ShieldAlert,
-      color: 'bg-red-500/20 text-red-400 border-red-500/30',
-      action: () => {
-        onLoadScenario(DEMO_TRANSACTIONS, DEMO_INCOME, DEMO_ANALYSIS_RESULT);
-      }
-    },
-    {
-      id: 'prediction',
-      title: 'Expense Prediction',
-      description: 'Shows rising trend in expenses over 6 months, predicting budget breach next month.',
-      icon: LineChart,
-      color: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-      action: () => {
-        const result = JSON.parse(JSON.stringify(DEMO_ANALYSIS_RESULT));
-        result.prediction.historical = [
-          { month: 'Jun', amount: 35000 },
-          { month: 'Jul', amount: 38000 },
-          { month: 'Aug', amount: 42000 },
-          { month: 'Sep', amount: 45000 },
-          { month: 'Oct', amount: 48000 },
-          { month: 'Nov', amount: 52000 }
-        ];
-        result.prediction.next_month_prediction = 56000;
-        result.prediction.trend = 'increasing';
-        onLoadScenario(DEMO_TRANSACTIONS, DEMO_INCOME, result);
-      }
-    }
-  ];
-
-  return (
-    <div className="max-w-4xl mx-auto mt-8">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-white mb-4">Try Pre-built AI Scenarios</h2>
-        <p className="text-gray-400 max-w-2xl mx-auto">
-          Experience how the multi-agent AI system responds to different financial behaviors and events. 
-          Click on any scenario below to load the data instantly.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {scenarios.map((scenario) => {
-          const Icon = scenario.icon;
-          return (
-            <div 
-              key={scenario.id}
-              className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-gray-500 transition-all cursor-pointer group flex flex-col h-full"
-              onClick={scenario.action}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-lg border ${scenario.color}`}>
-                  <Icon size={24} />
-                </div>
-                <button className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Play size={16} className="ml-0.5" />
-                </button>
-              </div>
-              
-              <h3 className="text-xl font-bold text-white mb-2">{scenario.title}</h3>
-              <p className="text-sm text-gray-400 flex-grow">{scenario.description}</p>
-              
-              <div className="mt-6 pt-4 border-t border-gray-700">
-                <span className="text-sm font-medium text-purple-400 group-hover:text-purple-300 flex items-center gap-1">
-                  Load Scenario <Play size={14} />
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+const STYLE = {
+  normal: { icon: HeartPulse, grad: 'from-emerald-500/25 to-cyan-500/5', text: 'text-emerald-300', expect: 'No alerts · health 100 · invest the surplus' },
+  fraud: { icon: ShieldAlert, grad: 'from-rose-500/25 to-fuchsia-500/5', text: 'text-rose-300', expect: '₹75k charge flagged by all 3 detectors' },
+  warning: { icon: AlertTriangle, grad: 'from-amber-500/25 to-orange-500/5', text: 'text-amber-300', expect: 'High risk · search finds the gentlest cuts' },
+  prediction: { icon: TrendingUp, grad: 'from-violet-500/25 to-sky-500/5', text: 'text-violet-300', expect: 'Regression forecast nears income → High risk' },
 };
+
+const DemoScenarios = ({ scenarios, activeId, onLoad }) => (
+  <div>
+    <div className="mx-auto mb-8 max-w-2xl text-center animate-fade-up">
+      <h2 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">See the agents <span className="gradient-text">react</span></h2>
+      <p className="mt-3 text-sm text-slate-400">
+        Each scenario sends a realistic statement through the live multi-agent pipeline. Nothing is pre-scripted: every number comes from the agents.
+      </p>
+    </div>
+    <div className="grid gap-5 md:grid-cols-2">
+      {scenarios.map((s, i) => {
+        const st = STYLE[s.id] || STYLE.normal;
+        const Icon = st.icon;
+        const months = new Set(s.transactions.map((t) => t.date.slice(0, 7))).size;
+        const total = s.transactions.reduce((a, t) => a + t.amount, 0);
+        const active = s.id === activeId;
+        return (
+          <button key={s.id} onClick={() => onLoad(s.id)}
+            className={`glass glass-hover group relative overflow-hidden p-6 text-left animate-fade-up ${active ? 'ring-1 ring-violet-500/50' : ''}`}
+            style={{ animationDelay: `${i * 70}ms` }}>
+            <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity group-hover:opacity-100 ${st.grad}`} />
+            <div className="relative">
+              <div className="flex items-start justify-between">
+                <div className={`grid h-11 w-11 place-items-center rounded-xl bg-black/30 ring-1 ring-white/10 ${st.text}`}><Icon size={20} /></div>
+                {active
+                  ? <span className="chip bg-violet-500/20 text-violet-200 ring-1 ring-violet-500/30"><Check size={11} /> Loaded</span>
+                  : <span className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white opacity-0 transition-all group-hover:opacity-100"><Play size={14} className="ml-0.5" /></span>}
+              </div>
+              <h3 className="mt-4 font-display text-xl font-semibold text-white">{s.title}</h3>
+              <p className="text-xs text-slate-400">{s.persona}</p>
+              <p className="mt-3 text-sm leading-relaxed text-slate-300">{s.description}</p>
+              <div className="mt-5 flex flex-wrap gap-2 text-[11px]">
+                <span className="chip bg-black/30 text-slate-300 ring-1 ring-white/10">Income {inr(s.income)}</span>
+                <span className="chip bg-black/30 text-slate-300 ring-1 ring-white/10">{s.transactions.length} txns · {months} mo</span>
+                <span className="chip bg-black/30 text-slate-300 ring-1 ring-white/10">{inr(total, { compact: true })} total</span>
+              </div>
+              <p className={`mt-4 text-xs font-medium ${st.text}`}>Expect: {st.expect}</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
 
 export default DemoScenarios;
