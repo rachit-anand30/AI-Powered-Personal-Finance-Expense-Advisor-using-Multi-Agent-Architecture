@@ -62,7 +62,7 @@ perfectly normal month.
 **Detectors:**
 | Detector | Formula / method | Role |
 |---|---|---|
-| **Modified Z-score** (Iglewicz & Hoaglin) | `M = 0.6745 (x − median) / MAD` | **Primary.** Median and MAD are not pulled by the outlier. Flag if `M > 3.5` **and** amount ≥ 5× median. |
+| **Modified Z-score** (Iglewicz & Hoaglin) | `M = 0.6745 (x − median) / MAD` | **Primary.** Median and MAD are not pulled by the outlier. Flag if `M > 3.5` **and** amount ≥ 5× median **and** (when income is known) amount ≥ 10% of monthly income, so a ₹4,000 jacket on a ₹60k salary is not "fraud". |
 | Z-score | `Z = (x − μ) / σ`, threshold 2.5 | Corroborating vote |
 | Isolation Forest | sklearn, `contamination="auto"`, IQR fence fallback | Corroborating vote; isolates points that need few random splits |
 
@@ -81,6 +81,8 @@ Spending is mapped as Needs (Bills, Healthcare, Education), Wants (Shopping, Ent
 and Food and Transport split 50/50.
 
 ### 3.2 Health score (0–100)
+Computed on **actual** spending (everything that left the account, flagged charges included), both for the
+multi-month average and for **each calendar month** (`monthly_scores`), using the same formula:
 ```
 score = 50 · clamp(actual_savings / savings_target, 0, 1)
       + 25 · min(1, needs_budget / needs_spent)²
@@ -97,7 +99,7 @@ scores **59 (High risk)**. The old formula gave this 93.
 | State | number of 5% cut-steps applied to each category, e.g. `{Food: 2, Shopping: 3}` |
 | Initial state | no cuts |
 | Actions | cut one more 5% step from a category (only while under its maximum cut) |
-| Goal test | total monthly savings from cuts ≥ savings gap (target − current savings) |
+| Goal test | total monthly savings from cuts ≥ savings gap (target − *baseline* savings, where the baseline leaves out one-off flagged charges, so a single fraud never becomes a permanent "cut Shopping" plan) |
 | Step cost / heuristic | **pain per rupee** = `pain_weight[c] × (1 + steps_already_cut[c])` |
 | Constraints | max cut per category: Bills 10%, Healthcare 5%, Education 20%, Food/Transport 40%, Shopping/Entertainment 70% |
 
@@ -124,8 +126,12 @@ more nodes for the same answer. Example: the Budget Warning scenario reaches its
 | ≥ 3 months | **Linear Regression** `y = m·t + b` (sklearn, `np.polyfit` fallback) | `45 + 40·R² + 2·months` (max 95) |
 | 1–2 months | Moving Average of available months | `40 + 15·months` |
 
-- Time series = monthly totals, **excluding** investment transfers and anything the Anomaly agent
-  flagged.
+- The regression fits monthly totals **excluding** investment transfers and anything the Anomaly agent
+  flagged (`trend_basis`). The chart history shows the **actual** totals (`amount`), flagged charges included.
+- **Running month:** if the current calendar month already has transactions, it is incomplete. It is left out
+  of the fit and the averages, and the forecast targets that month. The UI shows "spent so far vs forecast".
+- **One-offs toggle:** `include_one_offs: true` lets flagged purchases shape the trend, for when a big
+  purchase is genuine and expected to recur.
 - Trend: last month vs the previous one (±5% band = Stable).
 - Risk: forecast ÷ income > 0.9 → High, > 0.7 → Medium.
 

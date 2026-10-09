@@ -94,37 +94,69 @@ class BudgetPlanningAgent:
             "wants_spent": wants_spent,
         }
 
+    def split_needs_wants(self, by_category: Dict[str, float]) -> tuple:
+        """Map category spending (for one month) onto the Needs and Wants buckets."""
+        needs = wants = 0.0
+        for category, amount in by_category.items():
+            if category in self.category_mapping["Needs"]:
+                needs += amount
+            elif category in self.category_mapping["Split"]:
+                needs += amount * 0.5
+                wants += amount * 0.5
+            else:
+                wants += amount
+        return needs, wants
+
+    @staticmethod
+    def score(monthly_income: float, needs_spent: float, wants_spent: float, ideal: Dict[str, float]) -> Dict[str, Any]:
+        """Budget health (0-100): 50 pts savings, 25 pts needs adherence, 25 pts wants adherence.
+
+        Adherence is squared so large overspends hurt more than small ones.
+        """
+        total_spent = needs_spent + wants_spent
+        savings = monthly_income - total_spent
+        if monthly_income <= 0:
+            return {"score": 0.0, "savings": savings, "savings_rate": 0.0, "risk_level": "High" if total_spent else "Low"}
+        savings_pts = 50 * max(0.0, min(1.0, savings / ideal["savings"])) if ideal["savings"] > 0 else 50
+        needs_pts = 25 * (min(1.0, ideal["needs"] / needs_spent) ** 2 if needs_spent else 1.0)
+        wants_pts = 25 * (min(1.0, ideal["wants"] / wants_spent) ** 2 if wants_spent else 1.0)
+        score = savings_pts + needs_pts + wants_pts
+        ratio = total_spent / monthly_income
+        risk = "High" if ratio > 0.9 or score < 50 else "Medium" if ratio > 0.8 or score < 75 else "Low"
+        return {"score": score, "savings": savings, "savings_rate": savings / monthly_income * 100, "risk_level": risk}
+
     def create_budget(self, monthly_income: float, expense_analysis: Dict[str, Any], saving_goal: float = None,
                       anomalies: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Create a comprehensive budget plan.
 
-        Transactions flagged by the Anomaly agent are set aside until verified, so a fraudulent
-        charge does not turn into a permanent "cut your Shopping" recommendation.
+        Health, savings and warnings use ACTUAL spending - money that left the account, flagged or not.
+        The cut-search uses a BASELINE without flagged one-off charges, so a single fraud or one-off
+        purchase does not turn into a permanent "cut your Shopping" recommendation.
         """
-        flagged = (anomalies or {}).get("flagged_transactions", [])
-        if flagged:
-            spending = dict(expense_analysis.get("category_wise_spending", {}))
-            for a in flagged:
-                cat = a.get("category", "Others")
-                spending[cat] = max(0.0, spending.get(cat, 0.0) - a["amount"])
-            expense_analysis = {**expense_analysis, "category_wise_spending": {c: v for c, v in spending.items() if v > 0}}
-        excluded_total = sum(a["amount"] for a in flagged)
-
         ideal = self.apply_503020_rule(monthly_income, saving_goal)
-        current = self.analyze_current_spending(expense_analysis)
         months = max(1, expense_analysis.get("months_covered") or 1)
         monthly_by_cat = {c: a / months for c, a in expense_analysis.get("category_wise_spending", {}).items()}
 
-        needs_spent, wants_spent = current["needs_spent"], current["wants_spent"]
-        total_spent = needs_spent + wants_spent
-        actual_savings = monthly_income - total_spent
-        savings_rate = (actual_savings / monthly_income * 100) if monthly_income > 0 else 0.0
+        # Actual (average month)
+        needs_spent, wants_spent = self.split_needs_wants(monthly_by_cat)
+        actual = self.score(monthly_income, needs_spent, wants_spent, ideal)
+        actual_savings, savings_rate = actual["savings"], actual["savings_rate"]
+
+        # Baseline: flagged one-offs removed
+        flagged = (anomalies or {}).get("flagged_transactions", [])
+        flagged_total = sum(a["amount"] for a in flagged)
+        baseline_by_cat = dict(monthly_by_cat)
+        for a in flagged:
+            cat = a.get("category", "Others")
+            baseline_by_cat[cat] = max(0.0, baseline_by_cat.get(cat, 0.0) - a["amount"] / months)
+        baseline_by_cat = {c: v for c, v in baseline_by_cat.items() if v > 0}
+        baseline_savings = monthly_income - sum(baseline_by_cat.values())
 
         # Per-category limits: search for the gentlest cuts that reach the savings target
-        savings_gap = max(0.0, ideal["savings"] - actual_savings) if monthly_income > 0 else 0.0
-        search = self.optimize_cuts(monthly_by_cat, savings_gap)
+        savings_gap = max(0.0, ideal["savings"] - baseline_savings) if monthly_income > 0 else 0.0
+        search = self.optimize_cuts(baseline_by_cat, savings_gap)
         recommended = {}
-        for cat, monthly in monthly_by_cat.items():
+        for cat, monthly in baseline_by_cat.items():
             limit = monthly - search["cuts"].get(cat, 0.0)
             recommended[cat] = round(limit, -1) if limit >= 100 else round(limit, 2)
 
@@ -137,32 +169,37 @@ class BudgetPlanningAgent:
                 warnings.append(f"You are spending ₹{-actual_savings:,.0f} more than you earn each month.")
             elif savings_rate < 20:
                 warnings.append(f"You spend {100 - savings_rate:.1f}% of your income - only {savings_rate:.1f}% is left to save (target: 20%).")
+            if flagged_total:
+                warnings.append(f"₹{flagged_total:,.0f} of flagged transactions is included above. If it is fraud and gets refunded, "
+                                f"your savings rate returns to {baseline_savings / monthly_income * 100:.1f}%.")
             if needs_spent > ideal["needs"]:
                 warnings.append(f"Needs are ₹{needs_spent - ideal['needs']:,.0f} over the 50% target (₹{ideal['needs']:,.0f}).")
             if wants_spent > ideal["wants"]:
                 warnings.append(f"Wants are ₹{wants_spent - ideal['wants']:,.0f} over the {ideal['wants'] / monthly_income * 100:.0f}% target (₹{ideal['wants']:,.0f}).")
             for cat, cut in sorted(search["cuts"].items(), key=lambda kv: kv[1], reverse=True)[:3]:
-                warnings.append(f"Cut {cat} by ₹{cut:,.0f}/month (₹{monthly_by_cat[cat]:,.0f} → ₹{monthly_by_cat[cat] - cut:,.0f}).")
-            if excluded_total:
-                warnings.append(f"₹{excluded_total:,.0f} in flagged transactions is excluded from this plan until you verify it.")
+                warnings.append(f"Cut {cat} by ₹{cut:,.0f}/month (₹{baseline_by_cat[cat]:,.0f} → ₹{baseline_by_cat[cat] - cut:,.0f}).")
 
         # Tips targeted at the categories that are hurting the most
-        ranked = sorted(monthly_by_cat, key=lambda c: monthly_by_cat[c] - recommended.get(c, 0), reverse=True)
+        ranked = sorted(baseline_by_cat, key=lambda c: (search["cuts"].get(c, 0), baseline_by_cat[c]), reverse=True)
         tips = [self.tips_by_category[c] for c in ranked if c in self.tips_by_category][:3]
         tips.append("Automate a transfer of your savings target on payday so you save before you spend.")
 
-        # Health score (0-100): 50 pts savings, 25 pts needs adherence, 25 pts wants adherence.
-        # Adherence is squared so large overspends hurt more than small ones.
-        if monthly_income <= 0:
-            score = 0.0
-        else:
-            savings_pts = 50 * max(0.0, min(1.0, actual_savings / ideal["savings"])) if ideal["savings"] > 0 else 50
-            needs_pts = 25 * (min(1.0, ideal["needs"] / needs_spent) ** 2 if needs_spent else 1.0)
-            wants_pts = 25 * (min(1.0, ideal["wants"] / wants_spent) ** 2 if wants_spent else 1.0)
-            score = savings_pts + needs_pts + wants_pts
-
-        ratio = total_spent / monthly_income if monthly_income > 0 else 1.0
-        risk_level = "High" if ratio > 0.9 or score < 50 else "Medium" if ratio > 0.8 or score < 75 else "Low"
+        # The same score for every individual calendar month
+        monthly_scores = []
+        for m in expense_analysis.get("monthly_breakdown", []):
+            n, w = self.split_needs_wants(m["by_category"])
+            sc = self.score(monthly_income, n, w, ideal)
+            monthly_scores.append({
+                "month": m["month"],
+                "spent": round(n + w, 2),
+                "needs_spent": round(n, 2),
+                "wants_spent": round(w, 2),
+                "savings": round(sc["savings"], 2),
+                "savings_rate": round(sc["savings_rate"], 2),
+                "budget_health_score": round(sc["score"], 1),
+                "risk_level": sc["risk_level"],
+                "in_progress": m.get("in_progress", False),
+            })
 
         return {
             "recommended_budget": recommended,
@@ -178,10 +215,12 @@ class BudgetPlanningAgent:
                 "savings": round(actual_savings, 2),
             },
             "savings_rate": round(savings_rate, 2),
+            "baseline_savings": round(baseline_savings, 2),
             "warnings": warnings,
             "tips": tips,
-            "budget_health_score": round(score, 1),
-            "risk_level": risk_level,
+            "budget_health_score": round(actual["score"], 1),
+            "risk_level": actual["risk_level"],
             "optimization": search,
-            "excluded_flagged_amount": excluded_total,
+            "flagged_amount": flagged_total,
+            "monthly_scores": monthly_scores,
         }

@@ -6,14 +6,14 @@ import { colorFor, inr, pct } from '../lib/format';
 
 const BudgetPlan = ({ plan, analysis }) => {
   const months = Math.max(1, analysis.months_covered || 1);
+  // current = actual average spend; flagged = the part of it that is one-off flagged charges (not cut)
   const rows = Object.entries(analysis.category_wise_spending || {})
     .map(([cat, total]) => {
-      let current = total / months;
-      if (plan.excluded_flagged_amount && plan.recommended_budget[cat] != null) {
-        // show the same baseline the planner used
-        current = Math.min(current, plan.recommended_budget[cat] + (plan.optimization?.cuts?.[cat] || 0));
-      }
-      return { cat, current, limit: plan.recommended_budget[cat] ?? current, cut: plan.optimization?.cuts?.[cat] || 0 };
+      const current = total / months;
+      const cut = plan.optimization?.cuts?.[cat] || 0;
+      const limit = plan.recommended_budget[cat] ?? 0;
+      const flagged = Math.max(0, current - (limit + cut));
+      return { cat, current, limit, cut, flagged: flagged >= 50 ? flagged : 0 };
     })
     .sort((a, b) => b.current - a.current);
   const opt = plan.optimization || {};
@@ -37,9 +37,10 @@ const BudgetPlan = ({ plan, analysis }) => {
                       <span className="flex items-center gap-2 text-slate-300">
                         <span className="h-2 w-2 rounded-full" style={{ background: colorFor(r.cat) }} />{r.cat}
                         {r.cut > 0 && <span className="chip bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/20"><Scissors size={10} /> {inr(r.cut)}</span>}
+                        {r.flagged > 0 && <span className="chip bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/20" title="One-off flagged charge: not used to set the limit">incl. {inr(r.flagged)} flagged</span>}
                       </span>
                       <span className="num text-slate-400">
-                        {r.cut > 0 ? <><span className="text-slate-500 line-through">{inr(r.current)}</span> <span className="font-semibold text-white">{inr(r.limit)}</span></>
+                        {r.cut > 0 || r.flagged > 0 ? <><span className="text-slate-500 line-through">{inr(r.current)}</span> <span className="font-semibold text-white">{inr(r.limit)}</span></>
                           : <span className="font-semibold text-white">{inr(r.current)}</span>}
                       </span>
                     </div>

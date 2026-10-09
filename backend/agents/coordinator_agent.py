@@ -46,7 +46,8 @@ class CoordinatorAgent:
             "budget_plan": lambda: self.budget_agent.create_budget(bb["monthly_income"], bb["expense_analysis"], bb["saving_goal"], bb["anomalies"]),
             "predictions": lambda: self.prediction_agent.predict_future_expenses(
                 bb["transactions"], bb["monthly_income"],
-                exclude_signatures={self._signature(a) for a in bb["anomalies"]["flagged_transactions"]}),
+                exclude_signatures=set() if bb["include_one_offs"]
+                else {self._signature(a) for a in bb["anomalies"]["flagged_transactions"]}),
             "investment_plan": lambda: self.investment_agent.create_investment_plan(
                 bb["monthly_income"], bb["budget_plan"], bb["predictions"], bb["anomalies"],
                 bb["expense_analysis"].get("investments_total", 0.0) / max(1, bb["expense_analysis"].get("months_covered") or 1)),
@@ -83,8 +84,9 @@ class CoordinatorAgent:
             msgs.append({"from": "Expense Analyzer", "to": "Budget Planner", "content": f"Monthly spend by category across {out['months_covered']} month(s)."})
         elif key == "anomalies" and out["flagged_transactions"]:
             total = sum(a["amount"] for a in out["flagged_transactions"])
-            msgs.append({"from": "Anomaly Detection", "to": "Budget Planner", "content": f"Set aside ₹{total:,.0f} of unverified charges when planning."})
-            msgs.append({"from": "Anomaly Detection", "to": "Prediction", "content": f"Exclude {len(out['flagged_transactions'])} one-off transaction(s) worth ₹{total:,.0f} from the forecast."})
+            msgs.append({"from": "Anomaly Detection", "to": "Budget Planner", "content": f"Count ₹{total:,.0f} in actual spending, but don't base cuts on it."})
+            if not bb["include_one_offs"]:
+                msgs.append({"from": "Anomaly Detection", "to": "Prediction", "content": f"Exclude {len(out['flagged_transactions'])} one-off transaction(s) worth ₹{total:,.0f} from the forecast."})
             msgs.append({"from": "Anomaly Detection", "to": "Advisor", "content": "Raise a high-priority fraud alert."})
         elif key == "budget_plan":
             msgs.append({"from": "Budget Planner", "to": "Investment", "content": f"Monthly surplus is ₹{out['actual_allocation']['savings']:,.0f}."})
@@ -96,13 +98,15 @@ class CoordinatorAgent:
             msgs.append({"from": "Investment", "to": "Advisor", "content": f"Suggest a {out['risk_profile']} plan."})
         return msgs
 
-    def process_user_request(self, transactions: List[Dict[str, Any]], monthly_income: float, user_query: str = None, saving_goal: float = None) -> Dict[str, Any]:
+    def process_user_request(self, transactions: List[Dict[str, Any]], monthly_income: float, user_query: str = None,
+                             saving_goal: float = None, include_one_offs: bool = False) -> Dict[str, Any]:
         """Orchestrates the entire analysis pipeline across all agents."""
         bb: Dict[str, Any] = {
             "transactions": transactions,
             "monthly_income": monthly_income,
             "user_query": user_query,
             "saving_goal": saving_goal,
+            "include_one_offs": include_one_offs,
         }
         logs, trace, messages = [], [], []
         runners = self._runners(bb)

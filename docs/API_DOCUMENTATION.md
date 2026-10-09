@@ -23,9 +23,9 @@ are filled in by the ML classifier.
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/` | – | Status, agent list, ML classifier info, storage mode |
-| POST | `/full_analysis` | `{batch, user_query?, saving_goal?}` | **Everything**: all six agents' outputs + `categorized_transactions`, `trace`, `messages`, `logs` |
-| POST | `/analyze_expenses` | `TransactionBatch` | Expense Analyzer output |
-| POST | `/create_budget?saving_goal=` | `TransactionBatch` | Budget plan incl. `optimization` (search result) |
+| POST | `/full_analysis` | `{batch, user_query?, saving_goal?, include_one_offs?}` | **Everything**: all six agents' outputs + `categorized_transactions`, `trace`, `messages`, `logs` |
+| POST | `/analyze_expenses` | `TransactionBatch` | Expense Analyzer output, incl. `monthly_breakdown` (per month: total, by category, top 3 expenses per category) and overall `top_expenses` |
+| POST | `/create_budget?saving_goal=` | `TransactionBatch` | Budget plan incl. `optimization` (search result), `monthly_scores` (health per month), `baseline_savings` |
 | POST | `/predict_expenses` | `TransactionBatch` | Forecast (one-off anomalies excluded) |
 | POST | `/get_financial_advice` | `{batch, user_query?, saving_goal?}` | Advisor output incl. `response_to_query` |
 | POST | `/investment_plan` | `{batch, saving_goal?}` | Investment agent output |
@@ -54,13 +54,14 @@ are filled in by the ML classifier.
     "risk_level": "High"
   },
   "budget_plan": {
-    "budget_health_score": 100.0, "savings_rate": 49.9, "risk_level": "Low",
+    "budget_health_score": 53.3, "savings_rate": 8.2, "risk_level": "High",
     "budget_allocation": {"needs_budget": 30000, "wants_budget": 18000, "savings_budget": 12000},
-    "actual_allocation": {"needs_spent": 22549, "wants_spent": 7504, "savings": 29947},
+    "actual_allocation": {"needs_spent": 22549, "wants_spent": 32504, "savings": 4947},
     "optimization": {"cuts": {}, "goal_reached": true, "nodes_expanded": 0,
                      "strategy": "Greedy best-first search (priority queue on pain per rupee)"},
-    "excluded_flagged_amount": 75000,
-    "warnings": ["₹75,000 in flagged transactions is excluded from this plan until you verify it."]
+    "flagged_amount": 75000, "baseline_savings": 29946.67,
+    "monthly_scores": [{"month": "2026-09", "spent": 105337, "savings": -45337, "budget_health_score": 26.2, "risk_level": "High"}],
+    "warnings": ["...", "₹75,000 of flagged transactions is included above. If it is fraud and gets refunded, your savings rate returns to 49.9%."]
   },
   "predictions": {
     "prediction_method": "Linear Regression", "predicted_expense": 30953.33, "confidence": 79.4,

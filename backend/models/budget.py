@@ -13,4 +13,6 @@ class BudgetPlan(BaseModel):
     budget_health_score: float = Field(..., description="0-100 score indicating budget health")
     risk_level: str = Field(..., description="Low / Medium / High")
     optimization: Dict[str, Any] = Field(..., description="Result of the greedy best-first cut search")
-    excluded_flagged_amount: float = Field(0.0, description="Flagged (unverified) spending left out of the plan")
+    baseline_savings: float = Field(..., description="Monthly savings if flagged one-off charges are refunded")
+    flagged_amount: float = Field(0.0, description="Flagged spending included in actual figures but not used for cuts")
+    monthly_scores: List[Dict[str, Any]] = Field(default_factory=list, description="Health score and savings for each calendar month")

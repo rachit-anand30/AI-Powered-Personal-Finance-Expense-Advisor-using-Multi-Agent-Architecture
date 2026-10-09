@@ -17,10 +17,12 @@ class AdviceRequest(BaseModel):
     batch: TransactionBatch
     user_query: Optional[str] = Field(default=None, description="Natural-language question for the Advisor agent")
     saving_goal: Optional[float] = Field(default=None, ge=0, description="Monthly savings goal in INR")
+    include_one_offs: bool = Field(default=False, description="Let flagged one-off purchases shape the spending forecast")
 
 
 def run_pipeline(req: AdviceRequest) -> Dict[str, Any]:
-    result = coordinator.process_user_request(batch_to_dicts(req.batch), req.batch.monthly_income, req.user_query, req.saving_goal)
+    result = coordinator.process_user_request(batch_to_dicts(req.batch), req.batch.monthly_income, req.user_query,
+                                              req.saving_goal, req.include_one_offs)
     if "error" in result:
         raise HTTPException(status_code=500, detail={"error": result["error"], "logs": result["logs"]})
     return result

@@ -62,8 +62,9 @@ These are not just data passing. Each one changes another agent's result:
 
 1. **Expense Analyzer → everyone:** ML category labels decide what counts as Needs, Wants or
    Investments, and which transactions the fraud detector even looks at.
-2. **Anomaly → Budget Planner:** a flagged ₹75,000 charge is set aside, so the planner does **not**
-   tell the user to "cut Shopping by ₹6,700/month" because of a fraud.
+2. **Anomaly → Budget Planner:** a flagged ₹75,000 charge still counts in actual spending and the health
+   score (the money did leave the account), but the cut search ignores it, so the planner does **not** tell
+   the user to "cut Shopping by ₹6,700/month" because of a fraud.
 3. **Anomaly → Prediction:** the same charge is excluded from the time series, so the forecast stays
    at about ₹31k instead of jumping because of a one-off.
 4. **Budget + Prediction + Anomaly → Investment:** surplus sets how much can be invested, and the
@@ -89,7 +90,7 @@ These are not just data passing. Each one changes another agent's result:
 | Scenario | Key agent behaviour |
 |---|---|
 | Healthy Saver | 0 alerts (recurring BigBasket and SIP not flagged) · health 100 · Investment: *Aggressive* |
-| Fraud Detection | ₹75,000 flagged by **all 3** detectors (136× typical) · excluded from budget and forecast · Advisor leads with a security alert |
+| Fraud Detection | ₹75,000 flagged by **all 3** detectors (136× typical) · September health drops to 26 · ignored by the cut search and forecast trend · Advisor leads with a security alert |
 | Budget Warning | savings rate 7.5% → health 59, **High** risk · search expands 26 nodes, cuts Shopping/Food/Transport/Entertainment, leaves rent alone |
 | Lifestyle Creep | Linear Regression, 93% confidence, forecasts ₹63.8k on ₹70k income → **High** forecast risk, trend Increasing |
 

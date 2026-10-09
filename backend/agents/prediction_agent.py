@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List, Dict, Any, Optional, Set
-from datetime import datetime
+from datetime import datetime, date
 
 try:
     from sklearn.linear_model import LinearRegression
@@ -97,21 +97,17 @@ class PredictionAgent:
         return f"{year:04d}-{month:02d}"
 
     def predict_future_expenses(self, transactions: List[Dict[str, Any]], monthly_income: float, months_ahead: int = 1,
-                                exclude_signatures: Optional[Set[str]] = None) -> Dict[str, Any]:
+                                exclude_signatures: Optional[Set[str]] = None, today: Optional[date] = None) -> Dict[str, Any]:
         """Generate comprehensive predictions.
 
         exclude_signatures lets the Anomaly agent tell this agent which one-off transactions
         should not distort the forecast. Investment transfers and refunds are ignored.
         """
         exclude_signatures = exclude_signatures or set()
-        usable = [
-            t for t in transactions
-            if float(t.get("amount", 0)) > 0
-            and t.get("category") != "Investments"
-            and f"{t['date']}_{t['description']}_{t['amount']}" not in exclude_signatures
-        ]
-        excluded_amount = sum(float(t["amount"]) for t in transactions
-                              if f"{t['date']}_{t['description']}_{t['amount']}" in exclude_signatures)
+        spending = [t for t in transactions if float(t.get("amount", 0)) > 0 and t.get("category") != "Investments"]
+        is_one_off = lambda t: f"{t['date']}_{t['description']}_{t['amount']}" in exclude_signatures
+        usable = [t for t in spending if not is_one_off(t)]
+        excluded_amount = sum(float(t["amount"]) for t in spending if is_one_off(t))
         if not usable:
             return {
                 "prediction_method": "None",
@@ -125,8 +121,14 @@ class PredictionAgent:
                 "excluded_one_offs": excluded_amount,
             }
 
-        monthly_dict = self.prepare_time_series_data(usable)
-        y_values = list(monthly_dict.values())
+        monthly_dict = self.prepare_time_series_data(usable)        # trend basis (one-offs removed)
+        actual_dict = self.prepare_time_series_data(spending)       # what was really spent
+
+        # A month that is still running is incomplete: forecast it instead of fitting on it
+        current = (today or date.today()).strftime("%Y-%m")
+        in_progress = current if current in actual_dict and len(actual_dict) > 1 else None
+        fit_dict = {k: v for k, v in monthly_dict.items() if k != in_progress} or monthly_dict
+        y_values = list(fit_dict.values())
 
         # Decide which method to use based on data size
         if len(y_values) >= 3:
@@ -154,7 +156,12 @@ class PredictionAgent:
         else:
             trend = "Stable"
 
-        history = [{"month": month_key, "amount": float(val)} for month_key, val in monthly_dict.items()]
+        history = [
+            {"month": month_key, "amount": float(val), "trend_basis": float(monthly_dict.get(month_key, 0.0)),
+             "in_progress": month_key == in_progress}
+            for month_key, val in actual_dict.items()
+        ]
+        last_complete = list(fit_dict.keys())[-1]
 
         return {
             "prediction_method": method,
@@ -164,6 +171,8 @@ class PredictionAgent:
             "confidence": round(confidence, 1),
             "trend_direction": trend,
             "monthly_history": history,
-            "next_month": self.next_month_label(history[-1]["month"], months_ahead),
+            "next_month": self.next_month_label(last_complete, months_ahead),
+            "in_progress_month": in_progress,
+            "month_to_date": float(actual_dict[in_progress]) if in_progress else None,
             "excluded_one_offs": excluded_amount,
         }

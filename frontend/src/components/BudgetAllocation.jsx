@@ -9,13 +9,13 @@ const BUCKETS = [
   { key: 'savings', label: 'Savings', hint: 'Whatever is left after spending', color: '#22d3ee', target: 'savings_budget', actual: 'savings' },
 ];
 
-const BudgetAllocation = ({ plan, delay = 0 }) => {
+const BudgetAllocation = ({ plan, actual: actualOverride, periodLabel = 'Average month', delay = 0 }) => {
   const alloc = plan.budget_allocation || {};
-  const actual = plan.actual_allocation || {};
+  const actual = actualOverride || plan.actual_allocation || {};
 
   return (
     <Card delay={delay} className="h-full">
-      <CardHeader icon={Scale} title="50 / 30 / 20 check" subtitle="This month vs the ideal split" accent="text-fuchsia-300" />
+      <CardHeader icon={Scale} title="50 / 30 / 20 check" subtitle={`${periodLabel} vs the ideal split`} accent="text-fuchsia-300" />
       <div className="space-y-5">
         {BUCKETS.map((b) => {
           const target = alloc[b.target] || 0;
@@ -44,9 +44,9 @@ const BudgetAllocation = ({ plan, delay = 0 }) => {
           );
         })}
       </div>
-      {plan.excluded_flagged_amount > 0 && (
-        <p className="mt-5 rounded-xl bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
-          {inr(plan.excluded_flagged_amount)} of flagged charges is set aside until verified.
+      {plan.flagged_amount > 0 && (
+        <p className="mt-5 rounded-xl bg-rose-500/[0.06] px-3 py-2 text-[11px] text-rose-200/80 ring-1 ring-rose-500/15">
+          Includes {inr(plan.flagged_amount)} of flagged charges. If refunded, monthly savings go back to {inr(plan.baseline_savings)}.
         </p>
       )}
     </Card>

@@ -92,15 +92,17 @@ class AdvisorAgent:
                        f"({self._money(surplus)}/month).")
         elif score >= 50:
             summary = (f"Health score {score:.0f}/100 - you're saving {savings_rate:.0f}% of income, "
-                       f"below the 20% target. A few targeted cuts will get you there.")
+                       f"below the 20% target." + (" A few targeted cuts will get you there." if cuts else ""))
         else:
             summary = (f"Health score {score:.0f}/100 - your finances need attention: only {max(savings_rate, 0):.0f}% "
                        "of income is being saved and spending exceeds the 50/30/20 limits.")
         if flagged:
             total = sum(a["amount"] for a in flagged)
+            recovered = budget_plan.get("baseline_savings", surplus)
             summary = (f"Security alert: {len(flagged)} suspicious transaction{'s' if len(flagged) > 1 else ''} worth "
-                       f"{self._money(total)} need{'s' if len(flagged) == 1 else ''} your attention right away. "
-                       f"Leaving {'it' if len(flagged) == 1 else 'them'} aside, " + summary[0].lower() + summary[1:])
+                       f"{self._money(total)} need{'s' if len(flagged) == 1 else ''} your attention right away. {summary}"
+                       + (f" If it's fraud and you get it refunded, your monthly savings go back to {self._money(recovered)}."
+                          if monthly_income > 0 else ""))
 
         # Recommendations (structured, priority-ranked)
         recs: List[Dict[str, Any]] = []
@@ -118,12 +120,13 @@ class AdvisorAgent:
                 "description": f"You are {self._money(-surplus)}/month in deficit. Pause non-essential purchases and apply the cuts below.",
                 "impact_amount": -surplus, "priority": "high", "agent": "Budget Planner",
             })
-        elif monthly_income > 0 and surplus < target:
+        elif monthly_income > 0 and budget_plan.get("baseline_savings", surplus) < target:
+            surplus_ex = budget_plan.get("baseline_savings", surplus)
             recs.append({
-                "title": f"Save {self._money(target - surplus)} more per month",
-                "description": f"You save {self._money(surplus)} ({savings_rate:.1f}%) against a target of {self._money(target)}. "
+                "title": f"Save {self._money(target - surplus_ex)} more per month",
+                "description": f"You save {self._money(surplus_ex)} a month against a target of {self._money(target)}. "
                                "Automate the transfer on payday so it happens before you spend.",
-                "impact_amount": target - surplus, "priority": "medium", "agent": "Budget Planner",
+                "impact_amount": target - surplus_ex, "priority": "medium", "agent": "Budget Planner",
             })
         for cat, amt in sorted(cuts.items(), key=lambda kv: kv[1], reverse=True)[:2]:
             recs.append({

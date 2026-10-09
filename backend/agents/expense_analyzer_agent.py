@@ -99,9 +99,62 @@ class ExpenseAnalyzerAgent:
             "trends": {},
             "savings_rate": None,
             "risk_level": "Low",
+            "monthly_breakdown": [],
+            "top_expenses": {},
+            "in_progress_month": None,
         }
 
-    def analyze_transactions(self, transactions: List[Dict[str, Any]], monthly_income: Optional[float] = None) -> Dict[str, Any]:
+    TOP_N = 3
+
+    @staticmethod
+    def _item(t: Dict[str, Any]) -> Dict[str, Any]:
+        return {"date": str(t["date"])[:10], "description": t["description"], "amount": float(t["amount"])}
+
+    def _top_by_category(self, txns: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """The largest TOP_N transactions in each category."""
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for t in txns:
+            grouped.setdefault(t["category"], []).append(t)
+        return {
+            cat: [self._item(t) for t in sorted(items, key=lambda x: float(x["amount"]), reverse=True)[:self.TOP_N]]
+            for cat, items in grouped.items()
+        }
+
+    @staticmethod
+    def in_progress_month(txns: List[Dict[str, Any]], today: Optional[date] = None) -> Optional[str]:
+        """The current calendar month ("YYYY-MM") if it has data AND earlier months exist.
+
+        A month that is still running only has part of its spending, so it is shown on its own
+        ("so far") but kept out of averages, budget health and the forecast trend.
+        """
+        today = today or date.today()
+        current = today.strftime("%Y-%m")
+        months = {to_date(t["date"]).strftime("%Y-%m") for t in txns}
+        return current if current in months and len(months) > 1 else None
+
+    def monthly_breakdown(self, txns: List[Dict[str, Any]], in_progress: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Actual spending for each calendar month: total, per category, and top expenses per category."""
+        months: Dict[str, List[Dict[str, Any]]] = {}
+        for t in txns:
+            months.setdefault(to_date(t["date"]).strftime("%Y-%m"), []).append(t)
+        breakdown = []
+        for month in sorted(months):
+            items = months[month]
+            by_category: Dict[str, float] = {}
+            for t in items:
+                by_category[t["category"]] = by_category.get(t["category"], 0.0) + float(t["amount"])
+            breakdown.append({
+                "month": month,
+                "total": sum(by_category.values()),
+                "transaction_count": len(items),
+                "by_category": by_category,
+                "top_expenses": self._top_by_category(items),
+                "in_progress": month == in_progress,
+            })
+        return breakdown
+
+    def analyze_transactions(self, transactions: List[Dict[str, Any]], monthly_income: Optional[float] = None,
+                             today: Optional[date] = None) -> Dict[str, Any]:
         """Analyze a list of transactions and return summary metrics.
 
         Non-positive amounts (refunds/reversals) are ignored. Investment transfers are reported
@@ -119,12 +172,19 @@ class ExpenseAnalyzerAgent:
                 t["category_confidence"] = result["confidence"]
 
         valid = [t for t in transactions if float(t.get("amount", 0)) > 0]
-        spending = [t for t in valid if t["category"] not in self.SAVINGS_CATEGORIES]
-        investments_total = sum(float(t["amount"]) for t in valid if t["category"] in self.SAVINGS_CATEGORIES)
+        all_spending = [t for t in valid if t["category"] not in self.SAVINGS_CATEGORIES]
+
+        # Averages use completed months only; the running month is reported separately
+        in_progress = self.in_progress_month(valid, today) if valid else None
+        complete = lambda t: to_date(t["date"]).strftime("%Y-%m") != in_progress
+        spending = [t for t in all_spending if complete(t)]
+        investments_total = sum(float(t["amount"]) for t in valid if t["category"] in self.SAVINGS_CATEGORIES and complete(t))
 
         if not spending:
             result = self._empty_analysis()
             result["investments_total"] = investments_total
+            result["monthly_breakdown"] = self.monthly_breakdown(all_spending, in_progress)
+            result["in_progress_month"] = in_progress
             return result
 
         category_wise: Dict[str, float] = {}
@@ -183,4 +243,7 @@ class ExpenseAnalyzerAgent:
             "trends": trends,
             "savings_rate": savings_rate,
             "risk_level": risk_level,
+            "monthly_breakdown": self.monthly_breakdown(all_spending, in_progress),
+            "top_expenses": self._top_by_category(spending),
+            "in_progress_month": in_progress,
         }

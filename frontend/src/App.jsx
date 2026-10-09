@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw, X } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert, X } from 'lucide-react';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import TransactionUpload from './components/TransactionUpload';
@@ -12,6 +12,7 @@ import DemoScenarios from './components/DemoScenarios';
 import { checkHealth, describeError, fullAnalysis, isOffline } from './api/financeApi';
 import SCENARIOS from './data/scenarios.json';
 import SNAPSHOTS from './data/snapshots.json';
+import { inr, monthLabel } from './lib/format';
 
 const DEFAULT_SCENARIO = 'fraud';
 
@@ -26,6 +27,49 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [backend, setBackend] = useState({ status: 'checking', info: null });
+  const [toast, setToast] = useState(null);
+  const [includeOneOffs, setIncludeOneOffs] = useState(false); // let flagged one-offs shape the forecast
+  const oneOffsRef = useRef(false);
+  oneOffsRef.current = includeOneOffs;
+
+  const requestId = useRef(0);        // ignore responses that arrive after a newer request
+  const debounceTimer = useRef(null);
+  const pendingNote = useRef(null);   // what the user just changed, explained once the agents answer
+  const resultRef = useRef(null);
+  const dataRef = useRef({ transactions, income, savingGoal });
+  dataRef.current = { transactions, income, savingGoal };
+  resultRef.current = result;
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  /** Turn "the user added/removed X" into a message that shows the effect on the analysis. */
+  const explainChange = (note, data) => {
+    // Show the change in the month the transaction belongs to: that is what visibly moves on the dashboard
+    const monthTotal = (analysis, m) => analysis?.monthly_breakdown?.find((x) => x.month === m)?.total || 0;
+    const m = note.txn?.date?.slice(0, 7);
+    const spend = m
+      ? ` ${monthLabel(m)} spending ${inr(monthTotal(note.beforeAnalysis, m))} → ${inr(monthTotal(data.expense_analysis, m))}.`
+      : ` Avg monthly spend ${inr(note.beforeAnalysis?.monthly_total)} → ${inr(data.expense_analysis.monthly_total)}.`;
+    if (note.type === 'add') {
+      const t = note.txn;
+      const match = data.categorized_transactions.find(
+        (c) => c.date === t.date && c.description === t.description && Number(c.amount) === Number(t.amount));
+      const how = match?.category_source === 'ml' ? ` (ML ${Math.round(match.category_confidence)}%)` : '';
+      const flagged = data.anomalies.flagged_transactions.some(
+        (a) => a.date === t.date && a.description === t.description && Number(a.amount) === Number(t.amount));
+      return {
+        tone: flagged ? 'alert' : 'ok',
+        text: `Added ${inr(t.amount)} "${t.description}" → ${match?.category || t.category || 'categorised'}${how}.${spend}`
+          + (flagged ? ' The Anomaly agent flagged it as unusual.' : ''),
+      };
+    }
+    if (note.type === 'remove') return { tone: 'ok', text: `Removed "${note.txn.description}".${spend}` };
+    return { tone: 'ok', text: `All agents re-ran on your updated data.${spend}` };
+  };
 
   const pingBackend = useCallback(async () => {
     try {
@@ -39,6 +83,8 @@ function App() {
   }, []);
 
   const runAnalysis = useCallback(async ({ txns, inc, goal, id = null, query }) => {
+    const myRequest = ++requestId.current;
+    clearTimeout(debounceTimer.current);
     setLoading(true);
     setError(null);
     setTransactions(txns);
@@ -46,12 +92,19 @@ function App() {
     setSavingGoal(goal ?? null);
     setScenarioId(id);
     try {
-      const data = await fullAnalysis(txns, inc, goal, query);
+      const data = await fullAnalysis(txns, inc, goal, query, oneOffsRef.current);
+      if (myRequest !== requestId.current) return true;
+      if (pendingNote.current) {
+        setToast(explainChange(pendingNote.current, data));
+        pendingNote.current = null;
+      }
       setResult(data);
       setSource('live');
       setBackend((b) => (b.status === 'online' ? b : { status: 'online', info: b.info }));
       return true;
     } catch (err) {
+      if (myRequest !== requestId.current) return false;
+      pendingNote.current = null;
       if (isOffline(err)) {
         setBackend({ status: 'offline', info: null });
         if (id && SNAPSHOTS[id]) {
@@ -63,9 +116,27 @@ function App() {
       setError(describeError(err));
       return false;
     } finally {
-      setLoading(false);
+      if (myRequest === requestId.current) setLoading(false);
     }
   }, []);
+
+  /** Any edit on the Transactions tab: update the shared data, then re-run the agents shortly after. */
+  const editData = useCallback((changes, note) => {
+    const cur = dataRef.current;
+    const next = {
+      txns: changes.transactions ?? cur.transactions,
+      inc: changes.income ?? cur.income,
+      goal: 'savingGoal' in changes ? changes.savingGoal : cur.savingGoal,
+    };
+    setTransactions(next.txns);
+    setIncome(next.inc);
+    setSavingGoal(next.goal);
+    setScenarioId(null);
+    if (note) pendingNote.current = { ...note, beforeAnalysis: resultRef.current?.expense_analysis };
+    clearTimeout(debounceTimer.current);
+    if (!next.txns.length || !(Number(next.inc) > 0)) return;
+    debounceTimer.current = setTimeout(() => runAnalysis({ txns: next.txns, inc: next.inc, goal: next.goal }), 500);
+  }, [runAnalysis]);
 
   const loadScenario = useCallback((id, goToDashboard = true) => {
     const s = SCENARIOS.find((x) => x.id === id);
@@ -77,6 +148,14 @@ function App() {
   useEffect(() => {
     pingBackend().finally(() => loadScenario(DEFAULT_SCENARIO, false));
   }, [pingBackend, loadScenario]);
+
+  const toggleOneOffs = (value) => {
+    oneOffsRef.current = value;
+    setIncludeOneOffs(value);
+    const s = SCENARIOS.find((x) => x.id === scenarioId);
+    runAnalysis({ txns: transactions, inc: income, goal: savingGoal, id: scenarioId, query: s?.query });
+  };
+  const forecastControls = { includeOneOffs, onToggleOneOffs: toggleOneOffs, disabled: backend.status !== 'online' };
 
   const scenario = SCENARIOS.find((s) => s.id === scenarioId);
   const ctx = { transactions, income, savingGoal };
@@ -95,21 +174,22 @@ function App() {
       case 'Transactions':
         return (
           <TransactionUpload
-            key={scenarioId || 'custom'}
-            initialTransactions={transactions}
+            transactions={transactions}
+            income={income}
+            savingGoal={savingGoal}
             categorized={result.categorized_transactions}
-            initialIncome={income}
-            initialGoal={savingGoal}
-            onAnalyze={async (txns, inc, goal) => {
-              if (await runAnalysis({ txns, inc, goal })) setActiveTab('Dashboard');
-            }}
+            flagged={result.anomalies?.flagged_transactions}
+            onChange={editData}
+            onRerun={() => runAnalysis({ txns: transactions, inc: income, goal: savingGoal })}
+            onViewDashboard={() => setActiveTab('Dashboard')}
             loading={loading}
+            backendOnline={backend.status === 'online'}
           />
         );
       case 'Budget':
         return <BudgetPlan plan={result.budget_plan} analysis={result.expense_analysis} income={income} />;
       case 'Forecast':
-        return <Forecast prediction={result.predictions} income={income} />;
+        return <Forecast prediction={result.predictions} income={income} controls={forecastControls} />;
       case 'Invest':
         return <InvestmentPlan plan={result.investment_plan} />;
       case 'Advisor':
@@ -119,7 +199,7 @@ function App() {
       case 'Scenarios':
         return <DemoScenarios scenarios={SCENARIOS} activeId={scenarioId} onLoad={(id) => loadScenario(id)} />;
       default:
-        return <Dashboard result={result} income={income} ctx={ctx} backendOnline={backend.status === 'online'} onNavigate={setActiveTab} />;
+        return <Dashboard result={result} income={income} ctx={ctx} backendOnline={backend.status === 'online'} onNavigate={setActiveTab} forecastControls={forecastControls} />;
     }
   };
 
@@ -162,9 +242,20 @@ function App() {
               <RefreshCw size={12} className="animate-spin text-violet-300" /> Agents working…
             </div>
           )}
-          <div key={activeTab + (source || '') + (scenarioId || 'custom')}>{renderContent()}</div>
+          <div key={activeTab}>{renderContent()}</div>
         </div>
       </main>
+
+      {toast && (
+        <div className="fixed inset-x-4 z-50 mx-auto flex max-w-lg animate-fade-up items-start gap-3 rounded-2xl border border-white/10 bg-ink-900/95 px-4 py-3 text-sm text-slate-200 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:mx-0"
+          style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))' }} role="status">
+          {toast.tone === 'alert'
+            ? <ShieldAlert size={18} className="mt-0.5 shrink-0 text-rose-300" />
+            : <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-300" />}
+          <span className="flex-1">{toast.text}</span>
+          <button onClick={() => setToast(null)} className="text-slate-500 hover:text-white" aria-label="Dismiss"><X size={16} /></button>
+        </div>
+      )}
     </div>
   );
 }

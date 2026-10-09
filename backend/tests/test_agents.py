@@ -131,6 +131,12 @@ def test_recurring_merchant_not_flagged(anomaly_agent):
                          tx(f"2026-{m}-09", "Swiggy", 300), tx(f"2026-{m}-12", "Coffee", 150)]
     assert anomaly_agent.detect_all_anomalies(transactions)["flagged_transactions"] == []
 
+def test_small_unusual_purchase_not_flagged_when_income_known(anomaly_agent):
+    transactions = [tx(f"2026-08-{i:02d}", f"Shop {i}", 400 + i * 10) for i in range(1, 12)]
+    transactions.append(tx("2026-08-20", "Myntra jacket", 4000))
+    assert anomaly_agent.detect_all_anomalies(transactions)["flagged_transactions"]            # unusual vs history...
+    assert anomaly_agent.detect_all_anomalies(transactions, monthly_income=60000)["flagged_transactions"] == []  # ...but < 10% of income
+
 def test_anomaly_reports_methods_and_high_risk(anomaly_agent):
     transactions = [tx(f"2026-08-{i:02d}", f"Shop {i}", 300 + i * 10) for i in range(1, 12)]
     transactions.append(tx("2026-08-20", "INTL POS DUBAI", 80000))
@@ -163,11 +169,30 @@ def test_higher_saving_goal_shrinks_wants(budget_agent):
     assert plan["budget_allocation"]["savings_budget"] == 15000
     assert plan["budget_allocation"]["wants_budget"] == 10000
 
-def test_flagged_transactions_excluded_from_budget(budget_agent):
+def test_flagged_charge_counts_in_health_but_not_in_cuts(budget_agent):
     anomalies = {"flagged_transactions": [{"amount": 75000, "category": "Shopping"}]}
     plan = budget_agent.create_budget(60000, {"category_wise_spending": {"Bills": 15000, "Shopping": 76000}}, anomalies=anomalies)
-    assert plan["excluded_flagged_amount"] == 75000
-    assert plan["budget_health_score"] == 100
+    assert plan["flagged_amount"] == 75000
+    assert plan["budget_health_score"] < 50                 # real cash flow: the money did leave the account
+    assert plan["actual_allocation"]["savings"] == 60000 - 91000
+    assert plan["baseline_savings"] == 60000 - 16000        # what savings would be after a refund
+    assert plan["optimization"]["cuts"] == {}               # no "cut Shopping" because of a one-off
+
+def test_monthly_scores_use_each_month(budget_agent, expense_agent):
+    txns = [tx("2026-07-01", "House Rent", 15000), tx("2026-08-01", "House Rent", 15000), tx("2026-08-05", "Myntra", 32000)]
+    analysis = expense_agent.analyze_transactions(txns, monthly_income=50000)
+    scores = {m["month"]: m for m in budget_agent.create_budget(50000, analysis)["monthly_scores"]}
+    assert scores["2026-07"]["spent"] == 15000 and scores["2026-07"]["budget_health_score"] == 100
+    assert scores["2026-08"]["spent"] == 47000 and scores["2026-08"]["risk_level"] == "High"
+
+def test_monthly_breakdown_and_top_expenses(expense_agent):
+    txns = [tx("2026-08-01", "Swiggy", 300), tx("2026-08-02", "Zomato", 900), tx("2026-08-03", "Swiggy", 500),
+            tx("2026-08-04", "Dominos", 700), tx("2026-09-01", "Swiggy", 100)]
+    analysis = expense_agent.analyze_transactions(txns)
+    aug = analysis["monthly_breakdown"][0]
+    assert aug["month"] == "2026-08" and aug["total"] == 2400 and aug["transaction_count"] == 4
+    assert [t["amount"] for t in aug["top_expenses"]["Food"]] == [900, 700, 500]
+    assert len(analysis["top_expenses"]["Food"]) == 3
 
 def test_zero_income_is_handled(budget_agent):
     plan = budget_agent.create_budget(0, {"category_wise_spending": {"Food": 100}})
@@ -217,3 +242,30 @@ def test_advisor_intent_detection(query, intent):
 @pytest.mark.parametrize("text,amount", [("₹30,000 phone", 30000), ("rs 4500", 4500), ("a 25k laptop", 25000), ("1.5 lakh car", 150000)])
 def test_amount_extraction(text, amount):
     assert AdvisorAgent.extract_amount(text) == amount
+
+# ---------------------------------------------------------------- running (incomplete) month
+
+def test_in_progress_month_kept_out_of_averages(expense_agent, budget_agent):
+    txns = [tx("2026-08-01", "House Rent", 15000), tx("2026-09-01", "House Rent", 15000), tx("2026-10-03", "Swiggy", 500)]
+    analysis = expense_agent.analyze_transactions(txns, monthly_income=50000, today=date(2026, 10, 9))
+    assert analysis["in_progress_month"] == "2026-10"
+    assert analysis["months_covered"] == 2 and analysis["monthly_total"] == 15000   # not dragged down by October
+    october = analysis["monthly_breakdown"][-1]
+    assert october["month"] == "2026-10" and october["in_progress"] and october["total"] == 500
+
+def test_forecast_targets_running_month():
+    txns = [tx("2026-07-01", "Rent", 20000), tx("2026-08-01", "Rent", 22000), tx("2026-09-01", "Rent", 24000),
+            tx("2026-10-02", "Rent", 3000)]
+    p = PredictionAgent().predict_future_expenses(txns, 50000, today=date(2026, 10, 9))
+    assert p["next_month"] == "2026-10" and p["in_progress_month"] == "2026-10"
+    assert p["predicted_expense"] == pytest.approx(26000)                         # fitted on Jul-Sep only
+    assert p["month_to_date"] == 3000 and p["monthly_history"][-1]["in_progress"]
+
+def test_one_offs_can_be_included_in_forecast():
+    from backend.agents.coordinator_agent import CoordinatorAgent
+    txns = [tx(f"2026-0{m}-{d:02d}", f"Shop {d}", 300 + d * 10) for m in (7, 8, 9) for d in range(1, 8)]
+    txns.append(tx("2026-09-20", "INTL POS DUBAI", 80000))
+    c = CoordinatorAgent()
+    without = c.process_user_request([dict(t) for t in txns], 50000)["predictions"]["predicted_expense"]
+    with_one_offs = c.process_user_request([dict(t) for t in txns], 50000, include_one_offs=True)["predictions"]["predicted_expense"]
+    assert with_one_offs > without + 10000

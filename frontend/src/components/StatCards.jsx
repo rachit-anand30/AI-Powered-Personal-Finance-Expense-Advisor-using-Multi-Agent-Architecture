@@ -41,21 +41,22 @@ const Stat = ({ icon: Icon, label, value, foot, accent, delay }) => (
   </div>
 );
 
-const StatCards = ({ income, analysis, budget, risk }) => {
-  const spend = analysis.monthly_total || 0;
-  const savings = budget.actual_allocation?.savings ?? income - spend;
-  const rate = budget.savings_rate ?? 0;
-  const months = analysis.months_covered || 0;
-
+/** KPI row for one period (a single month or the multi-month average). */
+const StatCards = ({ income, view, investedMonthly, risk }) => {
+  const { spend, savings, rate, health } = view;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Stat icon={Wallet} label="Monthly income" accent="text-emerald-300" delay={0}
         value={<AnimatedINR value={income} />}
-        foot={analysis.investments_total > 0 ? `${inr(analysis.investments_total / Math.max(months, 1))}/mo already invested` : 'Take-home pay'} />
-      <Stat icon={CreditCard} label="Avg monthly spend" accent="text-rose-300" delay={60}
-        value={<AnimatedINR value={spend} />}
-        foot={months ? `${months} month${months > 1 ? 's' : ''} analysed · ${inr(analysis.daily_average)}/day` : 'No transactions yet'} />
-      <Stat icon={PiggyBank} label="Monthly savings" accent="text-cyan-300" delay={120}
+        foot={investedMonthly > 0 ? `${inr(investedMonthly)}/mo already invested` : 'Take-home pay'} />
+      <Stat icon={CreditCard} label={view.isAvg ? 'Avg monthly spend (full months)' : `Spent in ${view.label}`} accent="text-rose-300" delay={60}
+        value={<span className={spend > income && income > 0 ? 'text-rose-300' : ''}><AnimatedINR value={spend} /></span>}
+        foot={view.isAvg
+          ? `Average of ${view.monthCount} month${view.monthCount === 1 ? '' : 's'}`
+          : <>{view.count} transaction{view.count === 1 ? '' : 's'}{view.avgSpend != null && view.monthCount > 1 && (
+              <> · <span className={spend > view.avgSpend ? 'text-rose-300' : 'text-emerald-300'}>
+                {spend > view.avgSpend ? '▲' : '▼'} {inr(Math.abs(spend - view.avgSpend))}</span> vs avg</>)}</>} />
+      <Stat icon={PiggyBank} label={view.isAvg ? 'Avg monthly savings' : `Saved in ${view.label}`} accent="text-cyan-300" delay={120}
         value={<span className={savings < 0 ? 'text-rose-300' : ''}><AnimatedINR value={savings} /></span>}
         foot={
           <span className="flex items-center gap-2">
@@ -64,13 +65,13 @@ const StatCards = ({ income, analysis, budget, risk }) => {
           </span>
         } />
       <div className="glass glass-hover animate-fade-up flex items-center gap-4 p-5" style={{ animationDelay: '180ms' }}>
-        <HealthGauge score={budget.budget_health_score || 0} />
+        <HealthGauge score={health || 0} />
         <div className="min-w-0">
-          <span className="label">Budget health</span>
+          <span className="label">Budget health · {view.isAvg ? 'avg' : view.label}</span>
           <p className="mt-1 text-sm font-medium text-white">
-            {budget.budget_health_score >= 80 ? 'Excellent' : budget.budget_health_score >= 50 ? 'Needs attention' : 'Critical'}
+            {health >= 80 ? 'Excellent' : health >= 50 ? 'Needs attention' : 'Critical'}
           </p>
-          <div className="mt-2"><RiskBadge level={risk} label={`Overall ${risk.toLowerCase()} risk`} /></div>
+          <div className="mt-2"><RiskBadge level={risk} label={`${risk} risk`} /></div>
         </div>
       </div>
     </div>

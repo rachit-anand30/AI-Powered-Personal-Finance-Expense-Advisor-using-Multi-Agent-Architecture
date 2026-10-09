@@ -39,11 +39,12 @@ export const isOffline = (error) => !error.response;
 export const checkHealth = async () => (await api.get('/', { timeout: 4000 })).data;
 
 /** Master endpoint: every agent through the coordinator. */
-export const fullAnalysis = async (transactions, income, savingGoal, query) =>
+export const fullAnalysis = async (transactions, income, savingGoal, query, includeOneOffs = false) =>
   (await api.post('/full_analysis', {
     batch: toBatch(transactions, income),
     user_query: query || null,
     saving_goal: savingGoal ? Number(savingGoal) : null,
+    include_one_offs: includeOneOffs,
   })).data;
 
 /** Ask the Advisor agent a natural-language question. */

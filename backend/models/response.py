@@ -15,6 +15,8 @@ class ExpenseAnalysisResponse(BaseModel):
     trends: Dict[str, Any]
     savings_rate: Optional[float] = None
     risk_level: str
+    monthly_breakdown: List[Dict[str, Any]] = []
+    top_expenses: Dict[str, List[Dict[str, Any]]] = {}
 
 class FullAnalysisResponse(BaseModel):
     """Comprehensive analysis response combining all agents."""

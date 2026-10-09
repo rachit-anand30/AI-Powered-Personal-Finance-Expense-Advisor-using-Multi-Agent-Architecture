@@ -1,6 +1,6 @@
 # 🌟 AI-Powered Personal Finance & Expense Advisor
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python) ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green?logo=fastapi) ![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-orange?logo=scikitlearn) ![React](https://img.shields.io/badge/React-18-blue?logo=react) ![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python) ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green?logo=fastapi) ![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-orange?logo=scikitlearn) ![React](https://img.shields.io/badge/React-18-blue?logo=react) ![Tests](https://img.shields.io/badge/tests-56%20passing-brightgreen)
 
 A **multi-agent AI system** that reads your bank/UPI statement and does the following:
 - classifies every transaction with an **NLP + ML model**;
@@ -84,7 +84,7 @@ labelled offline snapshots of the demo scenarios and tells you how to start the 
 | Scenario | What happens |
 |---|---|
 | **Healthy Saver**: Priya, ₹60k income, 3 months | No false alarms (rent, SIP and the monthly BigBasket order are recognised as normal), health 100, *Aggressive* investment plan |
-| **Fraud Detection**: same + ₹75,000 international charge | Flagged by **all 3 detectors** (136× typical); excluded from budget and forecast; Advisor leads with a security alert |
+| **Fraud Detection**: same + ₹75,000 international charge | Flagged by **all 3 detectors** (136× typical); September health drops to 26; the cut search and forecast trend ignore the one-off; Advisor leads with a security alert |
 | **Budget Warning**: Rahul, ₹20k income, ~₹18.5k spent | Health 59, **High** risk; search expands 26 nodes and cuts Shopping/Food/Transport/Entertainment, never rent |
 | **Lifestyle Creep**: Arjun, rising spend | Linear Regression (93% confidence) forecasts ₹63.8k on ₹70k income → **High** forecast risk |
 
@@ -102,7 +102,7 @@ outputs, timing and the messages they passed.
 ```bash
 pytest backend/tests/ -v
 ```
-50 tests cover every agent, every endpoint, input validation, and all four demo scenarios
+56 tests cover every agent, every endpoint, input validation, and all four demo scenarios
 end-to-end. See [docs/TESTING_REPORT.md](docs/TESTING_REPORT.md).
 
 ## 📂 Structure

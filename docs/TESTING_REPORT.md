@@ -1,10 +1,10 @@
 # 🧪 Testing Report
 
-**Result: 50 / 50 tests passing** (`pytest backend/tests/ -v`, Python 3.14, about 8 s).
+**Result: 56 / 56 tests passing** (`pytest backend/tests/ -v`, Python 3.14, about 8 s).
 
 | Suite | File | Tests | Covers |
 |---|---|---|---|
-| Agent unit tests | `backend/tests/test_agents.py` | 38 | Every agent in isolation, including the 5 original core cases |
+| Agent unit tests | `backend/tests/test_agents.py` | 44 | Every agent in isolation, including the 5 original core cases |
 | API + scenario tests | `backend/tests/test_api.py` | 12 | Every endpoint through FastAPI's TestClient, validation, CSV upload, the agent trace, and all four demo scenarios end-to-end |
 
 ## 1. Original core cases (kept)

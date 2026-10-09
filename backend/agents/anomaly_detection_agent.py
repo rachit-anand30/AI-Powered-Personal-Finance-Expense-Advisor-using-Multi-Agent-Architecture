@@ -24,6 +24,7 @@ class AnomalyDetectionAgent:
     FIXED_COMMITMENTS = re.compile(r"\b(rent|emi|loan|insurance|sip|mutual funds?|tuition|fees|salary)\b", re.IGNORECASE)
     MODIFIED_Z_THRESHOLD = 3.5   # Iglewicz & Hoaglin recommended cut-off
     MIN_MEDIAN_MULTIPLE = 5.0    # must also be at least 5x a typical transaction
+    MIN_INCOME_SHARE = 0.10      # ...and, when income is known, at least 10% of monthly income
 
     def calculate_zscore(self, amounts: List[float]) -> List[float]:
         """Calculate z-scores for a list of transaction amounts."""
@@ -121,6 +122,8 @@ class AnomalyDetectionAgent:
             sig = self._signature(t)
             if sig not in flaggable or mz <= self.MODIFIED_Z_THRESHOLD or t["amount"] < self.MIN_MEDIAN_MULTIPLE * median:
                 continue
+            if monthly_income and t["amount"] < self.MIN_INCOME_SHARE * monthly_income:
+                continue  # statistically unusual but too small to matter (e.g. a ₹4,000 jacket on ₹60k income)
             methods = ["Modified Z-score"]
             if sig in zscore_hits:
                 methods.append("Z-score")
