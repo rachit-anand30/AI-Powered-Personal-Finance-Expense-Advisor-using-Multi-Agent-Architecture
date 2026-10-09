@@ -1,6 +1,6 @@
 # 🤝 Team Responsibilities
 
-## 🧑‍💻 Team Member 1: Financial data intelligence
+## 🧑‍💻 Adithya Nambiar (Team Member 1): Financial data intelligence
 | Component | Files |
 |---|---|
 | Expense Analyzer agent (hybrid ML + rules) | `backend/agents/expense_analyzer_agent.py` |
@@ -11,7 +11,7 @@
 - **Presents:** PEAS, environment analysis, ML classification (94% hold-out), fraud detection.
 - **Demos:** Healthy Saver and Fraud Detection scenarios, Transactions tab (ML labels).
 
-## 🧑‍💻 Team Member 2: Budget optimisation and prediction
+## 🧑‍💻 Rachit Anand (Team Member 2): Budget optimisation and prediction
 | Component | Files |
 |---|---|
 | Budget Planning agent (50/30/20 + greedy best-first search) | `backend/agents/budget_planning_agent.py` |
@@ -21,7 +21,7 @@
 - **Presents:** search problem formulation, health score, regression and confidence.
 - **Demos:** Budget Warning and Lifestyle Creep scenarios, Budget and Forecast tabs.
 
-## 🧑‍💻 Team Member 3: Coordinator, Investment, Advisor and application
+## 🧑‍💻 Rohith Abhinav (Team Member 3): Coordinator, Investment, Advisor and application
 | Component | Files |
 |---|---|
 | Coordinator agent (blackboard, trace, message bus) | `backend/agents/coordinator_agent.py` |

@@ -41,11 +41,11 @@ neither distorts the forecast nor produces a bogus "cut Shopping" recommendation
 [docs/AGENT_ARCHITECTURE.md](docs/AGENT_ARCHITECTURE.md).
 
 ## 👥 Team
-| Member | Agents | Focus |
+| Member | Agents | Contribution |
 |---|---|---|
-| **Team Member 1** | Expense Analyzer, Anomaly Detection | ML/NLP classification, fraud detection, PEAS |
-| **Team Member 2** | Budget Planner, Prediction | Search-based optimisation, forecasting, algorithms |
-| **Team Member 3** | Coordinator, Investment, Advisor | Orchestration, API, UI, architecture |
+| **Adithya Nambiar** | Expense Analyzer, Anomaly Detection | Built the ML/NLP transaction classifier (TF-IDF + Logistic Regression, 94% accuracy on unseen merchants) and the 3-detector fraud ensemble (Z-Score, Isolation Forest, IQR) that flags suspicious charges |
+| **Rachit Anand** | Budget Planner, Prediction | Implemented the 50/30/20 budgeting rule with greedy best-first search over spending cuts, plus the Linear Regression / Moving Average forecasting for next month's spend |
+| **Rohith Abhinav** | Coordinator, Investment, Advisor | System architect & integrator — built the Coordinator orchestration pipeline, inter-agent blackboard/message bus, the natural-language Advisor agent, the FastAPI backend + database layer, and the full React dashboard UI |
 
 ## 🛠️ Tech stack and why
 | Package | Used for | Why this choice |
